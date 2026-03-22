@@ -1,0 +1,10 @@
+# Default code ownership for the public repository.
+# Update these owners if the Kevv maintainer account or team changes.
+
+* @okjusthere
+/.github/ @okjusthere
+/.github/workflows/ @okjusthere
+/src/app/api/ @okjusthere
+/src/lib/db/ @okjusthere
+/src/lib/public-chat-access.ts @okjusthere
+/src/lib/rate-limit.ts @okjusthere

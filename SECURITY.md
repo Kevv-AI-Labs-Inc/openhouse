@@ -47,3 +47,15 @@ Kevv will not pursue legal action for good-faith security research that:
 ## Sensitive Data
 
 If you discover exposed credentials, tokens, personal data, or customer information, stop testing and report the issue immediately. Do not copy, retain, share, or further process sensitive data except as strictly necessary to report the issue responsibly.
+
+## Public Repository Defaults
+
+For the public GitHub repository, Kevv recommends enabling these repository settings in addition to the files committed here:
+
+- Secret scanning alerts
+- Push protection
+- Validity checks for supported secrets
+- Dependabot alerts
+- Dependabot security updates
+
+The committed GitHub configuration in this repository covers CI, code ownership, and Dependabot version updates. Secret scanning and push protection still need to be enabled in GitHub repository settings by a repository administrator.

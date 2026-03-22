@@ -12,6 +12,7 @@ The official hosted product, support, and brand experience remain operated by Ke
 - Kevv trademarks, logos, product names, and official domains are not licensed under Apache 2.0. See [TRADEMARKS.md](./TRADEMARKS.md).
 - Security issues should be reported privately. See [SECURITY.md](./SECURITY.md).
 - Community contributions are welcome, but official product support is only provided for the Kevv-hosted service.
+- Contribution and review expectations are documented in [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 Official product and brand properties remain operated by Kevv.
 

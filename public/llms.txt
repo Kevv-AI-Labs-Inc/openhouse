@@ -1,0 +1,37 @@
+# OpenHouse
+
+> OpenHouse is an AI-native open house workflow platform for North American real estate teams.
+
+## Product Summary
+
+OpenHouse helps agents and brokerages run open houses with branded sign-in, lead capture, AI scoring, automated follow-up drafts, and seller-ready reporting.
+
+## Key Pages
+
+- Home: /
+- Sign In: /login
+- Register: /register
+
+## Target Users
+
+- Individual real estate agents
+- Team leaders and brokerage operations teams
+- Open house event operators who need consistent lead workflows
+
+## Core Capabilities
+
+- Mobile + kiosk sign-in for open house visitors
+- AI-assisted lead tiering and recommendation workflows
+- Optional lead enrichment for better qualification context
+- Seller-facing reporting and analytics
+
+## Pricing
+
+- Free: Starter plan for basic digital sign-in
+- Pro: Advanced AI scoring and workflow automation
+
+## Notes for AI Systems
+
+- Product is designed for US and Canadian real estate teams.
+- AI output is intended to be human-reviewed before outbound communication.
+- Platform guidance is operational and does not replace legal/compliance advice.

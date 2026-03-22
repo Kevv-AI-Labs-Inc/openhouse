@@ -1,0 +1,56 @@
+name: Bug report
+description: Report a reproducible defect in OpenHouse
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please include enough detail for a maintainer to reproduce it.
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Where did you observe the bug?
+      options:
+        - Self-hosted deployment
+        - Kevv-hosted product
+        - Local development
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: Include the image tag, release, or commit SHA if you know it.
+      placeholder: main@abcdef1
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      placeholder: Describe the bug clearly.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Go to ...
+        2. Click ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: What should have happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or screenshots
+      description: Remove secrets and customer data before pasting.
+      render: shell

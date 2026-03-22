@@ -1,0 +1,45 @@
+{
+    "$schema": "https://vercel.com/docs/schema/vercel.json",
+    "framework": "nextjs",
+    "buildCommand": "npm run build",
+    "installCommand": "npm ci",
+    "env": {
+        "DATABASE_URL": "@openhouse-database-url",
+        "AUTH_SECRET": "@openhouse-auth-secret",
+        "AUTH_GOOGLE_ID": "@openhouse-google-id",
+        "AUTH_GOOGLE_SECRET": "@openhouse-google-secret",
+        "AUTH_MICROSOFT_ENTRA_ID_ID": "@openhouse-microsoft-id",
+        "AUTH_MICROSOFT_ENTRA_ID_SECRET": "@openhouse-microsoft-secret",
+        "AUTH_MICROSOFT_ENTRA_ID_ISSUER": "@openhouse-microsoft-issuer",
+        "MAIL_TOKEN_ENCRYPTION_KEY": "@openhouse-token-encryption-key",
+        "NEXT_PUBLIC_SITE_URL": "https://app.example.com",
+        "NEXT_PUBLIC_SUPPORT_EMAIL": "support@example.com",
+        "AZURE_OPENAI_ENDPOINT": "@openhouse-azure-endpoint",
+        "AZURE_OPENAI_API_KEY": "@openhouse-azure-key",
+        "AZURE_OPENAI_DEPLOYMENT": "@openhouse-azure-deployment",
+        "LISTING_DATA_API_URL": "@openhouse-listing-data-url",
+        "LISTING_DATA_API_KEY": "@openhouse-listing-data-key",
+        "STRIPE_SECRET_KEY": "@openhouse-stripe-secret",
+        "STRIPE_WEBHOOK_SECRET": "@openhouse-stripe-webhook",
+        "STRIPE_PRO_PRICE_ID": "@openhouse-stripe-pro-price-id",
+        "RESEND_API_KEY": "@openhouse-resend-key",
+        "RESEND_FROM_EMAIL": "@openhouse-resend-from"
+    },
+    "headers": [
+        {
+            "source": "/oh/(.*)",
+            "headers": [
+                {
+                    "key": "X-Frame-Options",
+                    "value": "SAMEORIGIN"
+                }
+            ]
+        }
+    ],
+    "rewrites": [
+        {
+            "source": "/api/v1/:path*",
+            "destination": "/api/:path*"
+        }
+    ]
+}

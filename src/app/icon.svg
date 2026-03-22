@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="OpenHouse icon">
+  <defs>
+    <linearGradient id="openhouseIconGradient" x1="6%" y1="4%" x2="96%" y2="96%">
+      <stop offset="0%" stop-color="#0ea5a4" />
+      <stop offset="48%" stop-color="#22c55e" />
+      <stop offset="100%" stop-color="#2563eb" />
+    </linearGradient>
+  </defs>
+  <rect x="22" y="22" width="468" height="468" rx="116" fill="url(#openhouseIconGradient)" />
+  <path
+    d="M126 245L256 143L386 245"
+    fill="none"
+    stroke="#fff"
+    stroke-width="40"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <rect x="171" y="237" width="170" height="132" rx="24" fill="#fff" />
+  <rect x="236" y="274" width="40" height="95" rx="16" fill="#0d4260" />
+</svg>

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security reports
+    url: https://github.com/Kevv-AI-Labs-Inc/openhouse/blob/main/SECURITY.md
+    about: Please report vulnerabilities privately instead of opening a public issue.
+  - name: Official hosted product
+    url: https://openhouse.kevv.ai
+    about: The official Kevv-hosted product and support channels live here.

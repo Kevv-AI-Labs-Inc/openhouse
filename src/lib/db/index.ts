@@ -25,6 +25,14 @@ export function getDb() {
     return db!;
 }
 
+export function getPool() {
+    if (!pool) {
+        getDb();
+    }
+
+    return pool!;
+}
+
 export async function closeDb() {
     if (pool) {
         await pool.end();

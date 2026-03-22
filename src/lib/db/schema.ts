@@ -335,6 +335,22 @@ export const publicChatAccessGrants = mysqlTable(
     ]
 );
 
+export const rateLimitWindows = mysqlTable(
+    "oh_rate_limit_windows",
+    {
+        keyHash: varchar("keyHash", { length: 64 }).primaryKey(),
+        scope: varchar("scope", { length: 64 }).notNull(),
+        hitCount: int("hitCount").default(0).notNull(),
+        resetAt: timestamp("resetAt").notNull(),
+        createdAt: timestamp("createdAt").defaultNow().notNull(),
+        updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+    },
+    (table) => [
+        index("idx_oh_rate_limit_windows_resetAt").on(table.resetAt),
+        index("idx_oh_rate_limit_windows_updatedAt").on(table.updatedAt),
+    ]
+);
+
 // ==================== PUBLIC FUNNEL EVENTS ====================
 
 export const publicFunnelEvents = mysqlTable(
@@ -378,4 +394,5 @@ export type Event = typeof events.$inferSelect;
 export type SignIn = typeof signIns.$inferSelect;
 export type AiConversation = typeof aiConversations.$inferSelect;
 export type PublicChatAccessGrant = typeof publicChatAccessGrants.$inferSelect;
+export type RateLimitWindow = typeof rateLimitWindows.$inferSelect;
 export type PublicFunnelEvent = typeof publicFunnelEvents.$inferSelect;

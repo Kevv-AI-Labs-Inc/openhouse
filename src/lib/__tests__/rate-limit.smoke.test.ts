@@ -7,6 +7,7 @@ describe("rate limit smoke", () => {
     process.env = { ...originalEnv };
     delete process.env.UPSTASH_REDIS_REST_URL;
     delete process.env.UPSTASH_REDIS_REST_TOKEN;
+    delete process.env.DATABASE_URL;
   });
 
   afterEach(() => {
@@ -34,7 +35,7 @@ describe("rate limit smoke", () => {
     expect(getClientIp(headers)).toBe("198.51.100.1");
   });
 
-  it("uses the local limiter when Upstash is not configured", async () => {
+  it("uses the local limiter when no shared backend is configured", async () => {
     const first = await checkRateLimit({
       key: "rate-limit-smoke",
       limit: 1,

@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build --webpack",
-    "start": "HOSTNAME=0.0.0.0 node .next/standalone/openhouse/server.js",
+    "start": "node scripts/start-standalone.mjs",
     "lint": "eslint",
     "test:smoke": "vitest run"
   },

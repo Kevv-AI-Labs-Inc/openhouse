@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const publicSignInSchema = z.object({
+  clientSubmissionId: z.uuid().optional(),
   fullName: z.string().min(1, "Name is required"),
   phone: z.string().min(1, "Phone is required"),
   email: z.string().email("Valid email is required"),

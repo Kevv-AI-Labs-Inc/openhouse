@@ -14,6 +14,7 @@ describe("public sign-in smoke", () => {
 
   it("accepts the capture-first payload shape", () => {
     const result = publicSignInSchema.safeParse({
+      clientSubmissionId: "2f0d5a57-a32d-495d-9e9c-6540f8d955ca",
       fullName: "Taylor Buyer",
       phone: "555-123-4567",
       email: "taylor@example.com",

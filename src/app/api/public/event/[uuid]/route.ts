@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { events, signIns, users } from "@/lib/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { processSignInWithAi } from "@/lib/ai/process-signin";
 import { PLAN_LIMITS, hasUsageCap } from "@/lib/plans";
 import {
@@ -27,6 +27,47 @@ import { publicSignInSchema } from "@/lib/public-signin";
 import { upsertFollowUpDraft } from "@/lib/ai/follow-up-workflow";
 import { isPublicEventVisible } from "@/lib/public-mode";
 import { ZodError } from "zod";
+
+function buildSignInSuccessResponse(params: {
+    signInId: number;
+    featureAccessTier: string;
+    aiQaEnabled: boolean;
+    aiProcessed: boolean;
+    status: number;
+    deduplicated?: boolean;
+}) {
+    return NextResponse.json(
+        {
+            signInId: params.signInId,
+            success: true,
+            aiProcessed: params.aiProcessed,
+            chatUnlocked: params.aiQaEnabled,
+            featureAccessTier: params.featureAccessTier,
+            deduplicated: params.deduplicated ?? false,
+        },
+        { status: params.status }
+    );
+}
+
+function isDuplicateSignInError(error: unknown) {
+    if (!error || typeof error !== "object") {
+        return false;
+    }
+
+    const candidate = error as { code?: string; errno?: number };
+
+    return candidate.code === "ER_DUP_ENTRY" || candidate.errno === 1062;
+}
+
+function isMissingClientSubmissionIdColumnError(error: unknown) {
+    if (!error || typeof error !== "object") {
+        return false;
+    }
+
+    const candidate = error as { code?: string; errno?: number };
+
+    return candidate.code === "ER_BAD_FIELD_ERROR" || candidate.errno === 1054;
+}
 
 export async function GET(
     request: NextRequest,
@@ -191,22 +232,10 @@ export async function POST(
         return NextResponse.json({ error: "Event owner not found" }, { status: 404 });
     }
 
-    const rateLimitResult = await checkRateLimit({
-        key: `public-signin:${uuid}:${getClientIp(request.headers)}`,
-        limit: 12,
-        windowMs: 10 * 60 * 1000,
-    });
-
-    if (!rateLimitResult.ok) {
-        return NextResponse.json(
-            { error: "Too many sign-in attempts. Please try again shortly." },
-            { status: 429 }
-        );
-    }
-
     try {
         const body = await request.json();
         const data = publicSignInSchema.parse(body);
+        const isKioskRequest = request.headers.get("x-openhouse-kiosk") === "1";
         const tier = normalizePlanTier(owner.subscriptionTier);
         const featureAccessTier = resolveFeatureAccessTier({
             subscriptionTier: owner.subscriptionTier,
@@ -214,6 +243,57 @@ export async function POST(
             proTrialExpiresAt: event.proTrialExpiresAt,
         });
         const hasProFeatures = featureAccessTier !== "free";
+        const aiQaEnabled =
+            event.aiQaEnabled &&
+            hasProFeatures &&
+            hasAiConfiguration();
+
+        let existingSignIn: { id: number } | undefined;
+
+        if (data.clientSubmissionId) {
+            try {
+                [existingSignIn] = await db
+                    .select({ id: signIns.id })
+                    .from(signIns)
+                    .where(
+                        and(
+                            eq(signIns.eventId, event.id),
+                            eq(signIns.clientSubmissionId, data.clientSubmissionId)
+                        )
+                    )
+                    .limit(1);
+            } catch (lookupError) {
+                if (!isMissingClientSubmissionIdColumnError(lookupError)) {
+                    throw lookupError;
+                }
+
+                console.warn("[SignIn] clientSubmissionId column missing; duplicate protection is disabled until migration runs.");
+            }
+        }
+
+        if (existingSignIn) {
+            return buildSignInSuccessResponse({
+                signInId: existingSignIn.id,
+                featureAccessTier,
+                aiQaEnabled,
+                aiProcessed: hasProFeatures,
+                status: 200,
+                deduplicated: true,
+            });
+        }
+
+        const rateLimitResult = await checkRateLimit({
+            key: `${isKioskRequest ? "public-kiosk-signin" : "public-signin"}:${uuid}:${getClientIp(request.headers)}`,
+            limit: isKioskRequest ? 60 : 12,
+            windowMs: 10 * 60 * 1000,
+        });
+
+        if (!rateLimitResult.ok) {
+            return NextResponse.json(
+                { error: "Too many sign-in attempts. Please try again shortly." },
+                { status: 429 }
+            );
+        }
 
         if (tier === "free" && !hasProFeatures) {
             const signInsUsed = await countSignInsThisMonth(owner.id);
@@ -230,11 +310,12 @@ export async function POST(
             }
         }
 
-        const [result] = await db.insert(signIns).values({
+        const insertValues = {
             eventId: event.id,
             fullName: data.fullName,
             phone: data.phone,
             email: data.email,
+            clientSubmissionId: data.clientSubmissionId ?? null,
             captureMode: event.publicMode,
             hasAgent: data.hasAgent ?? false,
             isPreApproved: data.isPreApproved || "not_yet",
@@ -243,8 +324,67 @@ export async function POST(
             priceRange: data.priceRange || null,
             customAnswers: data.customAnswers || null,
             followUpSent: false,
-            crmSyncStatus: "pending",
-        });
+            crmSyncStatus: "pending" as const,
+        };
+
+        let signInId: number | null = null;
+
+        try {
+            const [result] = await db.insert(signIns).values(insertValues);
+
+            signInId = Number(result.insertId);
+        } catch (insertError) {
+            if (data.clientSubmissionId && isMissingClientSubmissionIdColumnError(insertError)) {
+                console.warn("[SignIn] clientSubmissionId column missing; retrying insert without offline deduplication metadata.");
+
+                const legacyInsertValues = {
+                    eventId: insertValues.eventId,
+                    fullName: insertValues.fullName,
+                    phone: insertValues.phone,
+                    email: insertValues.email,
+                    captureMode: insertValues.captureMode,
+                    hasAgent: insertValues.hasAgent,
+                    isPreApproved: insertValues.isPreApproved,
+                    interestLevel: insertValues.interestLevel,
+                    buyingTimeline: insertValues.buyingTimeline,
+                    priceRange: insertValues.priceRange,
+                    customAnswers: insertValues.customAnswers,
+                    followUpSent: insertValues.followUpSent,
+                    crmSyncStatus: insertValues.crmSyncStatus,
+                };
+                const [legacyResult] = await db.insert(signIns).values(legacyInsertValues);
+
+                signInId = Number(legacyResult.insertId);
+            } else if (data.clientSubmissionId && isDuplicateSignInError(insertError)) {
+                const [existingSignInAfterDuplicate] = await db
+                    .select({ id: signIns.id })
+                    .from(signIns)
+                    .where(
+                        and(
+                            eq(signIns.eventId, event.id),
+                            eq(signIns.clientSubmissionId, data.clientSubmissionId)
+                        )
+                    )
+                    .limit(1);
+
+                if (existingSignInAfterDuplicate) {
+                    return buildSignInSuccessResponse({
+                        signInId: existingSignInAfterDuplicate.id,
+                        featureAccessTier,
+                        aiQaEnabled,
+                        aiProcessed: hasProFeatures,
+                        status: 200,
+                        deduplicated: true,
+                    });
+                }
+            } else {
+                throw insertError;
+            }
+        }
+
+        if (!signInId) {
+            throw new Error("Failed to persist sign-in");
+        }
 
         await db
             .update(events)
@@ -255,7 +395,7 @@ export async function POST(
             try {
                 await processSignInWithAi({
                     eventId: event.id,
-                    signInId: Number(result.insertId),
+                    signInId,
                     subscriptionTier: "pro",
                     trigger: "sign_in",
                 });
@@ -266,35 +406,27 @@ export async function POST(
             try {
                 await upsertFollowUpDraft({
                     eventId: event.id,
-                    signInId: Number(result.insertId),
+                    signInId,
                     generationSource: "auto_sign_in",
                 });
             } catch (draftError) {
                 console.error("[SignIn] Auto follow-up draft failed:", draftError);
             }
         }
-
-        const aiQaEnabled =
-            event.aiQaEnabled &&
-            hasProFeatures &&
-            hasAiConfiguration();
-        const response = NextResponse.json(
-            {
-                signInId: result.insertId,
-                success: true,
-                aiProcessed: hasProFeatures,
-                chatUnlocked: aiQaEnabled,
-                featureAccessTier,
-            },
-            { status: 201 }
-        );
+        const response = buildSignInSuccessResponse({
+            signInId,
+            featureAccessTier,
+            aiQaEnabled,
+            aiProcessed: hasProFeatures,
+            status: 201,
+        });
 
         if (aiQaEnabled) {
             try {
                 const grant = await issuePublicChatAccessGrant(db, {
                     uuid,
                     eventId: event.id,
-                    signInId: Number(result.insertId),
+                    signInId,
                 });
                 response.cookies.set(grant.cookie);
             } catch (grantError) {

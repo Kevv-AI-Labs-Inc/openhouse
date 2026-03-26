@@ -223,6 +223,7 @@ export const signIns = mysqlTable(
         fullName: varchar("fullName", { length: 255 }).notNull(),
         phone: varchar("phone", { length: 50 }),
         email: varchar("email", { length: 255 }),
+        clientSubmissionId: varchar("clientSubmissionId", { length: 36 }),
         captureMode: mysqlEnum("captureMode", ["open_house", "listing_inquiry"]),
 
         // Buying Intent
@@ -289,6 +290,7 @@ export const signIns = mysqlTable(
         index("idx_oh_sign_ins_leadTier").on(table.leadTier),
         index("idx_oh_sign_ins_email").on(table.email),
         index("idx_oh_sign_ins_phone").on(table.phone),
+        uniqueIndex("uq_oh_sign_ins_clientSubmissionId").on(table.clientSubmissionId),
     ]
 );
 

@@ -29,6 +29,7 @@ import {
   readCachedKioskEvent,
   readLastKioskSyncAt,
   removeQueuedKioskSignIn,
+  requestPersistentKioskStorage,
   writeCachedKioskEvent,
   writeLastKioskSyncAt,
 } from "@/lib/kiosk-offline";
@@ -168,11 +169,11 @@ export default function KioskPage({
 
   const syncInFlightRef = useRef(false);
 
-  const refreshQueueState = useCallback(() => {
-    const summary = getKioskQueueSummary(uuid);
+  const refreshQueueState = useCallback(async () => {
+    const summary = await getKioskQueueSummary(uuid);
     setPendingCount(summary.pendingCount);
     setFailedCount(summary.failedCount);
-    setLastSyncAt(readLastKioskSyncAt(uuid));
+    setLastSyncAt(await readLastKioskSyncAt(uuid));
     setSyncError(summary.lastError);
   }, [uuid]);
 
@@ -191,10 +192,12 @@ export default function KioskPage({
       return;
     }
 
-    const queue = listQueuedKioskSignIns(uuid).filter((item) => item.status === "pending");
+    const queue = (await listQueuedKioskSignIns(uuid)).filter(
+      (item) => item.status === "pending"
+    );
 
     if (queue.length === 0) {
-      refreshQueueState();
+      await refreshQueueState();
       return;
     }
 
@@ -214,8 +217,8 @@ export default function KioskPage({
           });
 
           if (response.ok) {
-            removeQueuedKioskSignIn(uuid, item.clientSubmissionId);
-            writeLastKioskSyncAt(uuid, new Date().toISOString());
+            await removeQueuedKioskSignIn(uuid, item.clientSubmissionId);
+            await writeLastKioskSyncAt(uuid, new Date().toISOString());
             continue;
           }
 
@@ -226,59 +229,69 @@ export default function KioskPage({
               : `Sync failed (${response.status})`;
 
           if ([400, 403, 404].includes(response.status)) {
-            markKioskSignInFailed(uuid, item.clientSubmissionId, message);
+            await markKioskSignInFailed(uuid, item.clientSubmissionId, message);
             continue;
           }
 
-          markKioskSignInPending(uuid, item.clientSubmissionId, message);
+          await markKioskSignInPending(uuid, item.clientSubmissionId, message);
           break;
         } catch {
-          markKioskSignInPending(uuid, item.clientSubmissionId, "Waiting for connection");
+          await markKioskSignInPending(
+            uuid,
+            item.clientSubmissionId,
+            "Waiting for connection"
+          );
           break;
         }
       }
     } finally {
       syncInFlightRef.current = false;
       setSyncing(false);
-      refreshQueueState();
+      await refreshQueueState();
     }
   }, [refreshQueueState, uuid]);
 
   useEffect(() => {
     let active = true;
-    const cachedEvent = readCachedKioskEvent<EventInfo>(uuid);
+    void requestPersistentKioskStorage();
 
-    if (cachedEvent) {
-      setEvent(cachedEvent);
-      setUsingCachedEvent(true);
-      setPhase("welcome");
-    }
+    void (async () => {
+      const cachedEvent = await readCachedKioskEvent<EventInfo>(uuid);
 
-    refreshQueueState();
+      if (!active) {
+        return;
+      }
 
-    fetch(`/api/public/event/${uuid}`)
-      .then((response) => {
+      if (cachedEvent) {
+        setEvent(cachedEvent);
+        setUsingCachedEvent(true);
+        setPhase("welcome");
+      }
+
+      await refreshQueueState();
+
+      try {
+        const response = await fetch(`/api/public/event/${uuid}`);
+
         if (!response.ok) {
           throw new Error("Not found");
         }
 
-        return response.json() as Promise<EventInfo>;
-      })
-      .then((data) => {
+        const data = (await response.json()) as EventInfo;
+
         if (!active) {
           return;
         }
 
         setEvent(data);
-        writeCachedKioskEvent(uuid, data);
+        await writeCachedKioskEvent(uuid, data);
         setUsingCachedEvent(false);
         setPhase("welcome");
 
         if (navigator.onLine) {
           void flushQueuedSignIns();
         }
-      })
-      .catch(() => {
+      } catch {
         if (!active) {
           return;
         }
@@ -287,12 +300,16 @@ export default function KioskPage({
           setEvent(cachedEvent);
           setUsingCachedEvent(true);
           setPhase("welcome");
-          setSyncError((current) => current ?? "Offline. New sign-ins will sync when the iPad reconnects.");
+          setSyncError(
+            (current) =>
+              current ?? "Offline. New sign-ins will sync when the iPad reconnects."
+          );
           return;
         }
 
         setPhase("error");
-      });
+      }
+    })();
 
     return () => {
       active = false;
@@ -364,7 +381,7 @@ export default function KioskPage({
       return;
     }
 
-    const queued = queueKioskSignIn(uuid, {
+    const queued = await queueKioskSignIn(uuid, {
       clientSubmissionId: validation.data.clientSubmissionId!,
       payload: validation.data as typeof validation.data & { clientSubmissionId: string },
       queuedAt: new Date().toISOString(),
@@ -379,7 +396,7 @@ export default function KioskPage({
       return;
     }
 
-    refreshQueueState();
+    await refreshQueueState();
     setSyncError(null);
     setPhase("thanks");
     resetForm();

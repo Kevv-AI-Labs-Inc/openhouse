@@ -13,10 +13,13 @@ import { isBehaviorQualifiedLead, type SellerReportEvent } from "@/lib/seller-re
 import { buildSellerReportMetrics } from "@/lib/seller-report-metrics";
 import {
   ArrowLeft,
+  ArrowDownRight,
+  ArrowUpRight,
   CalendarDays,
   Clock,
   Download,
   Flame,
+  Info,
   MapPin,
   Printer,
   Share2,
@@ -45,6 +48,46 @@ function maskPhone(phone: string | null) {
   const digits = phone.replace(/\D/g, "");
   if (digits.length < 4) return "***";
   return `***-***-${digits.slice(-4)}`;
+}
+
+function formatDelta(delta: number | null, suffix = "") {
+  if (delta === null || delta === 0) {
+    return `in line${suffix ? ` ${suffix}` : ""}`;
+  }
+
+  return `${delta > 0 ? "+" : ""}${delta}${suffix}`;
+}
+
+function getComparisonTone(delta: number | null) {
+  if (delta === null) {
+    return {
+      label: "No benchmark yet",
+      className: "border-border/60 bg-card/60 text-muted-foreground",
+      icon: Info,
+    };
+  }
+
+  if (delta > 0) {
+    return {
+      label: "Ahead of benchmark",
+      className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700",
+      icon: ArrowUpRight,
+    };
+  }
+
+  if (delta < 0) {
+    return {
+      label: "Below benchmark",
+      className: "border-amber-500/30 bg-amber-500/10 text-amber-700",
+      icon: ArrowDownRight,
+    };
+  }
+
+  return {
+    label: "In line with benchmark",
+    className: "border-sky-500/30 bg-sky-500/10 text-sky-700",
+    icon: TrendingUp,
+  };
 }
 
 export function SellerReportView({ event, isPublic = false, shareUrl, csvUrl }: Props) {
@@ -79,40 +122,103 @@ export function SellerReportView({ event, isPublic = false, shareUrl, csvUrl }: 
     signIns: attributedSignIns,
     funnelMetrics: event.funnelMetrics,
   });
-  const executiveSummary = [
+  const behaviorQualifiedRate = signIns.length
+    ? Math.round((behaviorQualifiedLeads.length / signIns.length) * 100)
+    : 0;
+  const benchmark = event.benchmark;
+  const postEventActivityDays = event.activitySeries.filter(
+    (point) => point.signIns > 0 || point.formStarts > 0 || point.pageViews > 0
+  ).length;
+  const benchmarkLeadTone = getComparisonTone(benchmark?.behaviorQualifiedLeadRate.delta ?? null);
+  const benchmarkCaptureTone = getComparisonTone(benchmark?.visitorCaptureRate.delta ?? null);
+  const benchmarkCaptureMedian = benchmark?.visitorCaptureRate.median ?? null;
+  const benchmarkCaptureDelta = benchmark?.visitorCaptureRate.delta ?? null;
+  const benchmarkCompletionMedian = benchmark?.formCompletionRate.median ?? null;
+  const benchmarkBehaviorMedian = benchmark?.behaviorQualifiedLeadRate.median ?? null;
+  const benchmarkBehaviorDelta = benchmark?.behaviorQualifiedLeadRate.delta ?? null;
+  const benchmarkInquiryMedian = benchmark?.inquiryShare.median ?? null;
+  const internalExecutiveSummary = [
     uniqueVisitors === 0
-      ? "Visitor tracking has not recorded any unique listing visitors yet. This report will start showing conversion performance as soon as people land on the public listing link."
-      : `${uniqueVisitors} unique listing visitors reached the public page and ${signIns.length} left their details${uniqueVisitorCaptureRate !== null ? `, producing a ${uniqueVisitorCaptureRate}% visitor-to-sign-in rate.` : "."}`,
+      ? "Traffic tracking is live, but this listing has not recorded enough public activity yet to benchmark conversion performance."
+      : benchmarkCaptureMedian !== null && uniqueVisitorCaptureRate !== null
+        ? `${uniqueVisitors} unique listing visitors produced ${signIns.length} sign-ins, a ${uniqueVisitorCaptureRate}% capture rate that sits ${formatDelta(benchmarkCaptureDelta, "pts")} versus the recent portfolio median of ${benchmarkCaptureMedian}%.`
+        : `${uniqueVisitors} unique listing visitors produced ${signIns.length} sign-ins, giving the seller a concrete baseline for how efficiently this page converts attention into contacts.`,
     uniqueFormStarts > 0
-      ? `${uniqueFormStarts} visitors started the form and ${signIns.length} completed it${uniqueFormCompletionRate !== null ? `, a ${uniqueFormCompletionRate}% completion rate.` : "."}`
-      : "Form-start tracking will populate once visitors begin engaging with the public sign-in experience.",
-    behaviorQualifiedLeads.length > 0
-      ? `${behaviorQualifiedLeads.length} leads showed behavior-based buying intent through repeat visits, deeper Q&A, or clear next-step questions.`
-      : "No visitors have yet shown strong behavior-based buying intent, so follow-up should focus on uncovering next steps.",
+      ? benchmarkCompletionMedian !== null && uniqueFormCompletionRate !== null
+        ? `${uniqueFormStarts} visitors started the form and ${signIns.length} finished it, a ${uniqueFormCompletionRate}% completion rate versus a comparable-listing median of ${benchmarkCompletionMedian}%.`
+        : `${uniqueFormStarts} visitors started the form and ${signIns.length} completed it, showing how much of the demand is making it all the way through capture.`
+      : "Form-start tracking will populate as soon as visitors begin engaging with the public sign-in flow.",
+    benchmarkBehaviorMedian !== null
+      ? `${behaviorQualifiedLeads.length} leads showed behavior-based buying intent, which is ${formatDelta(benchmarkBehaviorDelta, "pts")} versus the portfolio median for comparable listings.`
+      : behaviorQualifiedLeads.length > 0
+        ? `${behaviorQualifiedLeads.length} leads showed behavior-based buying intent through repeat visits, deeper Q&A, or clear next-step questions.`
+        : "Lead quality is still mostly contact capture today, so the next objective is to uncover stronger intent signals through follow-up and Q&A.",
   ];
-  const sellerTalkingPoints = [
+  const publicExecutiveSummary = [
+    uniqueVisitors === 0
+      ? "Public traffic tracking is active, but this listing has not accumulated enough visitor activity yet to show a full conversion story."
+      : `${uniqueVisitors} unique visitors viewed the listing page and ${signIns.length} left their details${uniqueVisitorCaptureRate !== null ? `, producing a ${uniqueVisitorCaptureRate}% visitor-to-sign-in rate.` : "."}`,
+    uniqueFormStarts > 0
+      ? `${uniqueFormStarts} visitors started the sign-in form and ${signIns.length} completed it${uniqueFormCompletionRate !== null ? `, a ${uniqueFormCompletionRate}% completion rate.` : "."}`
+      : "Form-start tracking will populate as more visitors engage with the sign-in flow.",
+    behaviorQualifiedLeads.length > 0
+      ? `${behaviorQualifiedLeads.length} visitors showed stronger buying intent through repeat engagement, deeper Q&A, or clear next-step questions.`
+      : "Visitor interest is still mostly early-stage, so the follow-up plan should focus on uncovering timing, financing, and showing intent.",
+  ];
+  const executiveSummary = isPublic ? publicExecutiveSummary : internalExecutiveSummary;
+  const internalTalkingPoints = [
+    {
+      title: "Traffic to capture",
+      body:
+        uniqueVisitors > 0 && benchmarkCaptureMedian !== null && uniqueVisitorCaptureRate !== null && benchmark
+          ? `This listing converted ${uniqueVisitorCaptureRate}% of public visitors into sign-ins, compared with a ${benchmarkCaptureMedian}% median across ${benchmark.cohortLabel}.`
+          : uniqueVisitors > 0
+            ? `${uniqueVisitors} unique listing visitors turned into ${signIns.length} captured contacts, giving the seller a measurable view of how well the property page converts attention into leads.`
+            : "Traffic has not accumulated yet, so the conversion story is still waiting on visitor volume.",
+    },
+    {
+      title: "Lead quality",
+      body:
+        benchmarkBehaviorMedian !== null
+          ? `${behaviorQualifiedLeads.length} visitors qualified on behavior, a ${behaviorQualifiedRate}% quality rate compared with a ${benchmarkBehaviorMedian}% comparable-listing median.`
+          : behaviorQualifiedLeads.length > 0
+            ? `${behaviorQualifiedLeads.length} leads did more than sign in. They asked substantive questions, came back, or showed clear next-step intent, making them the strongest follow-up pool.`
+            : "Most visitors have only completed a basic sign-in so far. The next objective is to convert contact capture into richer buyer signals.",
+    },
+    {
+      title: "Post-event demand",
+      body:
+        benchmarkInquiryMedian !== null
+          ? `${inquiryShare}% of captured demand came after the event through the reusable link, versus a ${benchmarkInquiryMedian}% median on comparable listings.`
+          : listingInquiryCaptures > 0
+            ? `${inquiryShare}% of captured demand came through the reusable listing link after the live event, proving the property kept generating inbound interest beyond the open house window.`
+            : `${onSiteShare}% of captured demand came on-site, so the live open house is still the primary source of lead generation for this listing.`,
+    },
+  ];
+  const publicTalkingPoints = [
     {
       title: "Traffic to capture",
       body:
         uniqueVisitors > 0
-          ? `${uniqueVisitors} unique listing visitors turned into ${signIns.length} captured contacts, giving the seller a measurable view of how well the property page converts attention into leads.`
-          : "Traffic has not accumulated yet, so the conversion story is still waiting on visitor volume.",
+          ? `${uniqueVisitors} people visited the listing page and ${signIns.length} chose to share their information, giving a concrete picture of how much buyer attention the home generated.`
+          : "Traffic is still building, so the conversion story will become clearer as more visitors reach the listing page.",
     },
     {
       title: "Lead quality",
       body:
         behaviorQualifiedLeads.length > 0
-          ? `${behaviorQualifiedLeads.length} leads did more than sign in. They asked substantive questions, came back, or showed clear next-step intent, making them the strongest follow-up pool.`
-          : "Most visitors have only completed a basic sign-in so far. The next objective is to convert contact capture into richer buyer signals.",
+          ? `${behaviorQualifiedLeads.length} visitors showed stronger intent through repeated engagement or more specific questions, which helps separate casual lookers from serious buyers.`
+          : "Most responses are still early-stage interest, so the next step is careful follow-up to understand timing, financing, and motivation.",
     },
     {
       title: "Post-event demand",
       body:
         listingInquiryCaptures > 0
-          ? `${inquiryShare}% of captured demand came through the reusable listing link after the live event, proving the property kept generating inbound interest beyond the open house window.`
-          : `${onSiteShare}% of captured demand came on-site, so the live open house is still the primary source of lead generation for this listing.`,
+          ? `${inquiryShare}% of captured demand arrived after the live event through the reusable listing link, showing that interest continued after the open house window.`
+          : `${onSiteShare}% of captured demand came during the live event, so the open house itself remained the main demand driver for this listing.`,
     },
   ];
+  const sellerTalkingPoints = isPublic ? publicTalkingPoints : internalTalkingPoints;
 
   const hourMap: Record<string, number> = {};
   attributedSignIns
@@ -248,6 +354,73 @@ export function SellerReportView({ event, isPublic = false, shareUrl, csvUrl }: 
         </CardContent>
       </Card>
 
+      {!isPublic && benchmark ? (
+        <Card className="border-border/60 bg-card/60">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Portfolio Benchmark</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Compared against {benchmark.cohortLabel}. Confidence is{" "}
+              <span className="font-medium text-foreground">{benchmark.confidence}</span>.
+            </p>
+          </CardHeader>
+          <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            {[
+              {
+                label: "Sign-ins",
+                metric: benchmark.signIns,
+                suffix: "",
+              },
+              {
+                label: "Capture rate",
+                metric: benchmark.visitorCaptureRate,
+                suffix: "%",
+              },
+              {
+                label: "Form completion",
+                metric: benchmark.formCompletionRate,
+                suffix: "%",
+              },
+              {
+                label: "Behavior-qualified",
+                metric: benchmark.behaviorQualifiedLeadRate,
+                suffix: "%",
+              },
+              {
+                label: "Post-event share",
+                metric: benchmark.inquiryShare,
+                suffix: "%",
+              },
+            ].map((item) => {
+              const tone = getComparisonTone(item.metric.delta);
+              const ToneIcon = tone.icon;
+
+              return (
+                <div
+                  key={item.label}
+                  className="rounded-2xl border border-border/55 bg-background/75 p-4"
+                >
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    {item.label}
+                  </p>
+                  <div className="mt-3 flex items-baseline justify-between gap-3">
+                    <p className="text-3xl font-semibold tracking-tight text-foreground">
+                      {item.metric.current !== null ? `${item.metric.current}${item.suffix}` : "—"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      median {item.metric.median !== null ? `${item.metric.median}${item.suffix}` : "—"}
+                    </p>
+                  </div>
+                  <div className={`mt-3 inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] ${tone.className}`}>
+                    <ToneIcon className="h-3 w-3" />
+                    {item.metric.delta !== null ? formatDelta(item.metric.delta, item.suffix) : tone.label}
+                  </div>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Card>
         <CardHeader><CardTitle className="text-base">Key Insights</CardTitle></CardHeader>
         <CardContent className="space-y-3">
@@ -264,6 +437,104 @@ export function SellerReportView({ event, isPublic = false, shareUrl, csvUrl }: 
           <div className="flex items-center justify-between text-sm"><span className="text-muted-foreground">Warm leads</span><span className="font-medium">{warmLeads.length} ({signIns.length ? Math.round((warmLeads.length / signIns.length) * 100) : 0}%)</span></div>
           <Separator />
           <div className="flex items-center justify-between text-sm"><span className="text-muted-foreground">Direct buyer opportunities</span><span className="font-medium">{noAgent} ({directBuyerPercent}%)</span></div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/60 bg-card/60">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Demand Curve</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Daily public-page interest, form starts, and completed captures around the event window.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-3">
+            <div
+              className={`rounded-2xl border px-4 py-3 ${
+                isPublic
+                  ? "border-border/55 bg-background/75"
+                  : benchmarkCaptureTone.className
+              }`}
+            >
+              <p className="text-xs font-semibold uppercase tracking-[0.14em]">Capture efficiency</p>
+              <p className="mt-2 text-2xl font-semibold">{uniqueVisitorCaptureRate !== null ? `${uniqueVisitorCaptureRate}%` : "—"}</p>
+              <p className="mt-1 text-xs">
+                {isPublic ? "Share of page visitors who completed sign-in." : benchmarkCaptureTone.label}
+              </p>
+            </div>
+            <div
+              className={`rounded-2xl border px-4 py-3 ${
+                isPublic
+                  ? "border-border/55 bg-background/75"
+                  : benchmarkLeadTone.className
+              }`}
+            >
+              <p className="text-xs font-semibold uppercase tracking-[0.14em]">Lead quality</p>
+              <p className="mt-2 text-2xl font-semibold">{behaviorQualifiedRate}%</p>
+              <p className="mt-1 text-xs">
+                {isPublic ? "Share of captured visitors showing stronger buying intent." : benchmarkLeadTone.label}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-border/55 bg-background/75 px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Active demand days</p>
+              <p className="mt-2 text-2xl font-semibold">{postEventActivityDays}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Days with tracked visits, form starts, or captures on this listing link.
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {event.activitySeries.map((point) => {
+              const maxValue = Math.max(
+                1,
+                ...event.activitySeries.flatMap((item) => [
+                  item.pageViews,
+                  item.formStarts,
+                  item.signIns,
+                ])
+              );
+
+              return (
+                <div
+                  key={point.label}
+                  className="grid grid-cols-[4.5rem_1fr] items-center gap-4"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{point.label}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {point.pageViews + point.formStarts + point.signIns} touches
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    {[
+                      { label: "Views", value: point.pageViews, className: "bg-emerald-500" },
+                      { label: "Starts", value: point.formStarts, className: "bg-sky-500" },
+                      { label: "Sign-ins", value: point.signIns, className: "bg-orange-500" },
+                    ].map((series) => (
+                      <div key={series.label} className="flex items-center gap-3">
+                        <span className="w-12 text-[11px] text-muted-foreground">{series.label}</span>
+                        <div className="h-2.5 flex-1 rounded-full bg-muted/35">
+                          <div
+                            className={`h-full rounded-full ${series.className}`}
+                            style={{
+                              width: `${Math.max(
+                                series.value > 0 ? 10 : 0,
+                                (series.value / maxValue) * 100
+                              )}%`,
+                            }}
+                          />
+                        </div>
+                        <span className="w-7 text-right text-[11px] font-medium text-foreground">
+                          {series.value}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </CardContent>
       </Card>
 

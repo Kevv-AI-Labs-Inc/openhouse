@@ -25,12 +25,37 @@ export interface SellerReportFunnelMetrics {
   uniqueFormStarts: number;
 }
 
+export interface SellerReportActivityPoint {
+  label: string;
+  pageViews: number;
+  formStarts: number;
+  signIns: number;
+}
+
+export interface SellerReportBenchmarkMetric {
+  current: number | null;
+  median: number | null;
+  delta: number | null;
+}
+
+export interface SellerReportBenchmark {
+  comparableEventsCount: number;
+  cohortLabel: string;
+  confidence: "thin" | "directional" | "solid";
+  signIns: SellerReportBenchmarkMetric;
+  visitorCaptureRate: SellerReportBenchmarkMetric;
+  formCompletionRate: SellerReportBenchmarkMetric;
+  behaviorQualifiedLeadRate: SellerReportBenchmarkMetric;
+  inquiryShare: SellerReportBenchmarkMetric;
+}
+
 export interface SellerReportEvent {
   id: number;
   uuid: string;
   propertyAddress: string;
   mlsNumber: string | null;
   listPrice: string | null;
+  propertyType: string | null;
   startTime: string;
   endTime: string;
   publicMode: string;
@@ -42,6 +67,8 @@ export interface SellerReportEvent {
   sqft: number | null;
   signIns: SellerReportSignIn[];
   funnelMetrics: SellerReportFunnelMetrics;
+  activitySeries: SellerReportActivityPoint[];
+  benchmark: SellerReportBenchmark | null;
 }
 
 export function isBehaviorQualifiedLead(signIn: SellerReportSignIn) {

@@ -26,6 +26,8 @@ import { buildPublicListingMarketing } from "@/lib/public-listing-view";
 import { publicSignInSchema } from "@/lib/public-signin";
 import { upsertFollowUpDraft } from "@/lib/ai/follow-up-workflow";
 import { isPublicEventVisible } from "@/lib/public-mode";
+import { detectPreferredQaLanguage } from "@/lib/property-qa-language";
+import { getPropertyQaInsights } from "@/lib/property-qa-insights";
 import { ZodError } from "zod";
 
 function buildSignInSuccessResponse(params: {
@@ -93,6 +95,7 @@ export async function GET(
             bedrooms: events.bedrooms,
             bathrooms: events.bathrooms,
             sqft: events.sqft,
+            yearBuilt: events.yearBuilt,
             propertyPhotos: events.propertyPhotos,
             propertyDescription: events.propertyDescription,
             aiQaEnabled: events.aiQaEnabled,
@@ -143,6 +146,9 @@ export async function GET(
         propertyFacts?: Record<string, unknown>;
         nearbyPoi?: Record<string, unknown>;
     } | null;
+    const qaLanguage = detectPreferredQaLanguage({
+        acceptLanguage: request.headers.get("accept-language"),
+    });
     const marketing = buildPublicListingMarketing({
         propertyAddress: event.propertyAddress,
         propertyType: event.propertyType,
@@ -152,6 +158,16 @@ export async function GET(
         propertyDescription: event.propertyDescription,
         aiQaContext,
     });
+    const qaInsights = getPropertyQaInsights({
+        propertyAddress: event.propertyAddress,
+        listPrice: event.listPrice,
+        propertyDescription: event.propertyDescription,
+        bedrooms: event.bedrooms,
+        bathrooms: event.bathrooms,
+        sqft: event.sqft,
+        yearBuilt: event.yearBuilt,
+        aiQaContext,
+    }, qaLanguage);
     const chatAccess = aiQaEnabled
         ? await resolvePublicChatAccessGrant(db, {
               cookieStore: request.cookies,
@@ -175,6 +191,7 @@ export async function GET(
         bedrooms: event.bedrooms,
         bathrooms: event.bathrooms,
         sqft: event.sqft,
+        yearBuilt: event.yearBuilt,
         propertyPhotos: event.propertyPhotos,
         propertyDescription: event.propertyDescription,
         featureAccessTier,
@@ -182,6 +199,8 @@ export async function GET(
         aiQaOnProPreview: featureAccessTier === "free" && hasAiConfiguration(),
         chatUnlocked: Boolean(chatAccess),
         marketing,
+        qaLanguage,
+        suggestedQuestions: qaInsights.suggestedQuestions,
     });
 }
 

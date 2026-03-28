@@ -10,6 +10,10 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import type { PropertyQaSource } from "@/lib/db/schema";
+import {
+    getQaUiCopy,
+    type SupportedQaLanguage,
+} from "@/lib/property-qa-language";
 
 interface EventInfo {
     propertyAddress: string;
@@ -17,12 +21,18 @@ interface EventInfo {
     aiQaOnProPreview: boolean;
     chatUnlocked: boolean;
     branding: { primaryColor?: string } | null;
+    qaLanguage?: SupportedQaLanguage;
+    suggestedQuestions?: string[];
 }
 
 interface ChatMessage {
     role: "user" | "assistant";
     content: string;
     sources?: PropertyQaSource[];
+    suggestedPrompts?: string[];
+    answerQuality?: "direct" | "partial" | "uncertain";
+    usedWebSearch?: boolean;
+    responseLanguage?: SupportedQaLanguage;
 }
 
 export default function PublicPropertyChatPage({
@@ -41,6 +51,80 @@ export default function PublicPropertyChatPage({
 
     const sessionStorageKey = useMemo(() => `oh-chat-session-${uuid}`, [uuid]);
     const primaryColor = event?.branding?.primaryColor || "#10b981";
+    const currentLanguage =
+        [...messages]
+            .reverse()
+            .find((message) => message.role === "assistant" && message.responseLanguage)?.responseLanguage ||
+        event?.qaLanguage ||
+        "en";
+    const uiCopy = getQaUiCopy(currentLanguage);
+
+    async function submitQuestion(content: string) {
+        const trimmed = content.trim();
+        if (!trimmed || sending) return;
+
+        const previousMessages = messages;
+        const nextMessages = [...messages, { role: "user" as const, content: trimmed }];
+        setMessages(nextMessages);
+        setInput("");
+        setSending(true);
+
+        try {
+            const res = await fetch(`/api/public/event/${uuid}/chat`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    message: trimmed,
+                    sessionId,
+                    history: messages.slice(-12),
+                }),
+            });
+
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data?.error || "Failed to chat");
+            }
+
+            if (data.sessionId && typeof data.sessionId === "string") {
+                setSessionId(data.sessionId);
+                window.localStorage.setItem(sessionStorageKey, data.sessionId);
+            }
+
+            setMessages((prev) => [
+                ...prev,
+                {
+                    role: "assistant",
+                    content: data.reply || "I couldn't generate a response.",
+                    sources: Array.isArray(data.sources) ? data.sources : undefined,
+                    suggestedPrompts: Array.isArray(data.suggestedPrompts)
+                        ? data.suggestedPrompts.filter((item: unknown): item is string => typeof item === "string")
+                        : undefined,
+                    answerQuality:
+                        data.answerQuality === "direct" ||
+                        data.answerQuality === "partial" ||
+                        data.answerQuality === "uncertain"
+                            ? data.answerQuality
+                            : undefined,
+                    usedWebSearch: data.usedWebSearch === true,
+                    responseLanguage:
+                        data.language === "en" ||
+                        data.language === "zh" ||
+                        data.language === "es" ||
+                        data.language === "fr" ||
+                        data.language === "pt" ||
+                        data.language === "ja" ||
+                        data.language === "ko"
+                            ? data.language
+                            : undefined,
+                },
+            ]);
+        } catch (error) {
+            setMessages(previousMessages);
+            toast.error(error instanceof Error ? error.message : "Failed to send message");
+        } finally {
+            setSending(false);
+        }
+    }
 
     useEffect(() => {
         fetch(`/api/public/event/${uuid}`)
@@ -99,49 +183,7 @@ export default function PublicPropertyChatPage({
 
     async function handleSend(eventForm: FormEvent) {
         eventForm.preventDefault();
-        const content = input.trim();
-        if (!content || sending) return;
-
-        const nextMessages = [...messages, { role: "user" as const, content }];
-        setMessages(nextMessages);
-        setInput("");
-        setSending(true);
-
-        try {
-            const res = await fetch(`/api/public/event/${uuid}/chat`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    message: content,
-                    sessionId,
-                    history: messages.slice(-12),
-                }),
-            });
-
-            const data = await res.json();
-            if (!res.ok) {
-                throw new Error(data?.error || "Failed to chat");
-            }
-
-            if (data.sessionId && typeof data.sessionId === "string") {
-                setSessionId(data.sessionId);
-                window.localStorage.setItem(sessionStorageKey, data.sessionId);
-            }
-
-            setMessages((prev) => [
-                ...prev,
-                {
-                    role: "assistant",
-                    content: data.reply || "I couldn't generate a response.",
-                    sources: Array.isArray(data.sources) ? data.sources : undefined,
-                },
-            ]);
-        } catch (error) {
-            setMessages(messages);
-            toast.error(error instanceof Error ? error.message : "Failed to send message");
-        } finally {
-            setSending(false);
-        }
+        await submitQuestion(input);
     }
 
     if (loadingEvent || loadingHistory) {
@@ -242,10 +284,23 @@ export default function PublicPropertyChatPage({
                     <CardContent className="p-4 space-y-4">
                         <div className="h-[55vh] overflow-y-auto rounded-lg border border-border/40 bg-muted/20 p-3 space-y-3">
                             {messages.length === 0 ? (
-                                <div className="h-full flex items-center justify-center text-center px-6">
-                                    <p className="text-sm text-muted-foreground">
-                                        Ask anything about the property, neighborhood, or next steps.
-                                    </p>
+                                <div className="h-full flex flex-col items-center justify-center gap-4 px-6 text-center">
+                                    <div className="space-y-2">
+                                        <p className="text-sm font-medium text-foreground">{uiCopy.emptyTitle}</p>
+                                        <p className="text-sm text-muted-foreground">{uiCopy.emptyBody}</p>
+                                    </div>
+                                    <div className="flex max-w-2xl flex-wrap justify-center gap-2">
+                                        {(event.suggestedQuestions || []).map((question) => (
+                                            <button
+                                                key={question}
+                                                type="button"
+                                                onClick={() => submitQuestion(question)}
+                                                className="rounded-full border border-border/60 bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:border-emerald-500/40 hover:text-foreground"
+                                            >
+                                                {question}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
                             ) : (
                                 messages.map((message, index) => (
@@ -260,6 +315,22 @@ export default function PublicPropertyChatPage({
                                                 }`}
                                         >
                                             {message.content}
+                                            {message.role === "assistant" ? (
+                                                <div className="mt-3 flex flex-wrap gap-2">
+                                                    {message.answerQuality && message.answerQuality !== "direct" ? (
+                                                        <span className="inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-700">
+                                                            {message.answerQuality === "uncertain"
+                                                                ? getQaUiCopy(message.responseLanguage || currentLanguage).needsAgentConfirmation
+                                                                : getQaUiCopy(message.responseLanguage || currentLanguage).bestAvailableAnswer}
+                                                        </span>
+                                                    ) : null}
+                                                    {message.usedWebSearch ? (
+                                                        <span className="inline-flex items-center rounded-full border border-sky-500/30 bg-sky-500/10 px-2.5 py-1 text-[11px] font-medium text-sky-700">
+                                                            {getQaUiCopy(message.responseLanguage || currentLanguage).checkedPublicSources}
+                                                        </span>
+                                                    ) : null}
+                                                </div>
+                                            ) : null}
                                             {message.role === "assistant" && message.sources && message.sources.length > 0 ? (
                                                 <div className="mt-3 flex flex-wrap gap-2">
                                                     {message.sources.map((source) =>
@@ -284,6 +355,27 @@ export default function PublicPropertyChatPage({
                                                     )}
                                                 </div>
                                             ) : null}
+                                            {message.role === "assistant" &&
+                                            message.suggestedPrompts &&
+                                            message.suggestedPrompts.length > 0 ? (
+                                                <div className="mt-3 space-y-2">
+                                                    <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                                                        {getQaUiCopy(message.responseLanguage || currentLanguage).askNextLabel}
+                                                    </p>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {message.suggestedPrompts.map((prompt) => (
+                                                            <button
+                                                                key={`${index}-${prompt}`}
+                                                                type="button"
+                                                                onClick={() => submitQuestion(prompt)}
+                                                                className="rounded-full border border-border/60 bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition hover:border-emerald-500/40 hover:text-foreground"
+                                                            >
+                                                                {prompt}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ) : null}
                                         </div>
                                     </div>
                                 ))
@@ -301,7 +393,7 @@ export default function PublicPropertyChatPage({
                             <Input
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}
-                                placeholder="Ask a question..."
+                                placeholder={uiCopy.placeholder}
                                 disabled={sending}
                             />
                             <Button type="submit" disabled={sending || !input.trim()}>

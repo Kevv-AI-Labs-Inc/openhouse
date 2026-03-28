@@ -8,6 +8,13 @@
  * 4) optional constrained public-web search for missing public facts
  */
 import type { EventPropertyFacts } from "@/lib/listing-import-shared";
+import { buildPropertyQaRecoveryQuestions } from "@/lib/property-qa-insights";
+import {
+  detectPreferredQaLanguage,
+  getQaLanguageDisplayName,
+  getQaUiCopy,
+  type SupportedQaLanguage,
+} from "@/lib/property-qa-language";
 import { chatCompletion } from "./openai";
 import { hasWebSearchConfiguration, searchPublicWeb, type WebSearchResult } from "./web-search";
 import type { PropertyQaSource } from "@/lib/db/schema";
@@ -40,7 +47,11 @@ type SourceCatalogEntry = PropertyQaSource & {
 type ModelQaResponse = {
   answer?: string;
   sourceKeys?: string[];
+  answerQuality?: "direct" | "partial" | "uncertain";
+  followUpQuestions?: string[];
 };
+
+type AnswerQuality = "direct" | "partial" | "uncertain";
 
 function serializeJsonForPrompt(value: unknown, maxChars = 12000): string {
   try {
@@ -496,14 +507,28 @@ function buildSystemPrompt(params: {
   context: PropertyContext;
   webSearchResults: WebSearchResult[];
   sourceCatalog: SourceCatalogEntry[];
+  secondPass?: boolean;
+  visitorLanguage: SupportedQaLanguage;
 }) {
-  const { context, webSearchResults, sourceCatalog } = params;
+  const {
+    context,
+    webSearchResults,
+    sourceCatalog,
+    secondPass = false,
+    visitorLanguage,
+  } = params;
   const propertyFactsText = formatPropertyFacts(context.propertyFacts);
 
   let prompt = `You are a helpful and accurate AI property assistant for:
 **${context.propertyAddress}**
 
-Your job is to answer visitor questions about this listing. Reply in the same language as the visitor. Keep answers concise, factual, and practical.
+Your job is to answer visitor questions about this listing. Keep answers concise, factual, and practical.
+
+## Visitor Language
+- Detected visitor language: ${getQaLanguageDisplayName(visitorLanguage)}
+- Write the full answer in that language.
+- Write followUpQuestions in that same language.
+- If the visitor mixes languages, follow the latest user message.
 
 ## Core Listing Facts
 - Address: ${context.propertyAddress}`;
@@ -561,17 +586,26 @@ Your job is to answer visitor questions about this listing. Reply in the same la
 
   prompt += `\n\n## Source Catalog\n${formatSourceCatalog(sourceCatalog)}`;
 
+  if (secondPass) {
+    prompt += `\n\n## Recovery Mode
+- This is a second pass because the first answer was incomplete or too hesitant.
+- Give the best verified partial answer you can from the trusted sources above.
+- If part of the visitor's question is still unknown, say exactly which part remains unconfirmed after answering the portion you can support.`;
+  }
+
   prompt += `\n\n## Response Rules
 - Answer in the same language as the visitor.
 - Prefer structured facts over raw payload.
 - Use public web results only for missing public information, never to override listing facts.
 - Never invent taxes, fees, school assignments, or building rules.
-- If exact information is missing, say that clearly and advise confirming with the listing agent.
-- Keep answers short: normally 2 to 4 sentences.
+- If exact information is missing, answer the supported portion first, then clearly note what still needs confirmation from the listing agent.
+- Do not refuse the whole question when you can answer part of it reliably.
+- Keep answers short: normally 2 to 5 sentences.
+- Never switch back to English unless the visitor asked in English.
 - For financing, legal, tax, or offer strategy questions, stay helpful but do not provide professional advice.
 - If you use public web results, include the relevant public web source keys.
 - Return JSON only in this shape:
-  {"answer": string, "sourceKeys": string[]}
+  {"answer": string, "sourceKeys": string[], "answerQuality": "direct" | "partial" | "uncertain", "followUpQuestions": string[]}
 - sourceKeys must only contain keys from the Source Catalog.
 - Include only the source keys actually used to answer the question.`;
 
@@ -586,13 +620,70 @@ function parseModelResponse(raw: string): ModelQaResponse {
       sourceKeys: Array.isArray(parsed.sourceKeys)
         ? parsed.sourceKeys.filter((item): item is string => typeof item === "string")
         : [],
+      answerQuality:
+        parsed.answerQuality === "direct" ||
+        parsed.answerQuality === "partial" ||
+        parsed.answerQuality === "uncertain"
+          ? parsed.answerQuality
+          : undefined,
+      followUpQuestions: Array.isArray(parsed.followUpQuestions)
+        ? parsed.followUpQuestions.filter((item): item is string => typeof item === "string")
+        : [],
     };
   } catch {
     return {
       answer: raw.trim(),
       sourceKeys: [],
+      answerQuality: undefined,
+      followUpQuestions: [],
     };
   }
+}
+
+function isLowConfidenceAnswer(answer: string | undefined) {
+  if (!answer) {
+    return true;
+  }
+
+  const normalized = answer.trim().toLowerCase();
+  return (
+    normalized.length < 48 ||
+    /i do not have enough reliable information|i don't have enough reliable information|i don't have reliable information|please confirm with the listing agent|i can't confirm|i cannot confirm/.test(
+      normalized
+    )
+  );
+}
+
+function normalizeAnswerQuality(
+  parsed: ModelQaResponse,
+  sourceKeys: string[]
+): AnswerQuality {
+  if (
+    parsed.answerQuality === "direct" ||
+    parsed.answerQuality === "partial" ||
+    parsed.answerQuality === "uncertain"
+  ) {
+    return parsed.answerQuality;
+  }
+
+  if (isLowConfidenceAnswer(parsed.answer)) {
+    return sourceKeys.length > 0 ? "partial" : "uncertain";
+  }
+
+  return sourceKeys.length > 0 ? "direct" : "partial";
+}
+
+function normalizeSuggestedPrompts(
+  value: string[] | undefined,
+  fallback: string[]
+) {
+  const sanitized = (value || [])
+    .map((item) => item.replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .filter((item) => item.endsWith("?"))
+    .slice(0, 3);
+
+  return Array.from(new Set(sanitized.length > 0 ? sanitized : fallback)).slice(0, 3);
 }
 
 function deriveFallbackSourceKeys(
@@ -621,34 +712,72 @@ function deriveFallbackSourceKeys(
   return available.has("core_listing") ? ["core_listing"] : [];
 }
 
-export async function chatWithProperty(
-  context: PropertyContext,
-  userMessage: string,
-  history: ChatHistory[] = []
-): Promise<{ reply: string; tokensUsed: number; sources: PropertyQaSource[] }> {
-  let webSearchResults: WebSearchResult[] = [];
+function mergeWebSearchResults(
+  primary: WebSearchResult[],
+  secondary: WebSearchResult[]
+) {
+  const seen = new Set<string>();
+  const merged: WebSearchResult[] = [];
 
-  if (shouldUseWebSearch(userMessage, context)) {
-    const webSearchPlan = buildWebSearchPlan(context, userMessage);
-    try {
-      webSearchResults = await searchPublicWeb(webSearchPlan.query, {
-        includeDomains: webSearchPlan.includeDomains,
-      });
-    } catch {
-      webSearchResults = [];
+  for (const item of [...primary, ...secondary]) {
+    const key = item.url || item.title;
+    if (!key || seen.has(key)) {
+      continue;
     }
+
+    seen.add(key);
+    merged.push(item);
   }
 
-  const sourceCatalog = buildSourceCatalog(context, webSearchResults);
-  const systemPrompt = buildSystemPrompt({ context, webSearchResults, sourceCatalog });
+  return merged.slice(0, 6);
+}
+
+function shouldRetryWithBroaderSearch(
+  parsed: ModelQaResponse,
+  sourceKeys: string[],
+  webSearchResults: WebSearchResult[]
+) {
+  const quality = normalizeAnswerQuality(parsed, sourceKeys);
+  return quality === "uncertain" || (quality === "partial" && webSearchResults.length === 0);
+}
+
+function buildRecoveryWebSearchPlan(context: PropertyContext, userMessage: string) {
+  const basePlan = buildWebSearchPlan(context, userMessage);
+  const broadenedQuery = `${context.propertyAddress} ${userMessage}`.trim();
+  const includeDomains = basePlan.includeDomains.length > 0
+    ? basePlan.includeDomains
+    : parseDomainList(process.env.PROPERTY_QA_WEB_SEARCH_INCLUDE_DOMAINS);
+
+  return {
+    query: broadenedQuery,
+    includeDomains,
+  };
+}
+
+async function runModelAnswer(params: {
+  context: PropertyContext;
+  userMessage: string;
+  history: ChatHistory[];
+  webSearchResults: WebSearchResult[];
+  secondPass?: boolean;
+  language: SupportedQaLanguage;
+}) {
+  const sourceCatalog = buildSourceCatalog(params.context, params.webSearchResults);
+  const systemPrompt = buildSystemPrompt({
+    context: params.context,
+    webSearchResults: params.webSearchResults,
+    sourceCatalog,
+    secondPass: params.secondPass,
+    visitorLanguage: params.language,
+  });
 
   const messages = [
     { role: "system" as const, content: systemPrompt },
-    ...history.map((h) => ({
+    ...params.history.map((h) => ({
       role: h.role as "user" | "assistant",
       content: h.content,
     })),
-    { role: "user" as const, content: userMessage },
+    { role: "user" as const, content: params.userMessage },
   ];
 
   const result = await chatCompletion({
@@ -662,7 +791,31 @@ export async function chatWithProperty(
   const sourceKeys =
     parsed.sourceKeys && parsed.sourceKeys.length > 0
       ? Array.from(new Set(parsed.sourceKeys))
-      : deriveFallbackSourceKeys(userMessage, sourceCatalog);
+      : deriveFallbackSourceKeys(params.userMessage, sourceCatalog);
+  const answerQuality = normalizeAnswerQuality(parsed, sourceKeys);
+  const suggestedPrompts = normalizeSuggestedPrompts(
+    parsed.followUpQuestions,
+    buildPropertyQaRecoveryQuestions(
+      {
+        propertyAddress: params.context.propertyAddress,
+        listPrice: params.context.listPrice,
+        propertyDescription: params.context.propertyDescription,
+        bedrooms: params.context.bedrooms,
+        bathrooms: params.context.bathrooms,
+        sqft: params.context.sqft,
+        yearBuilt: params.context.yearBuilt,
+        aiQaContext: {
+          customFaq: params.context.customFaq,
+          mlsData: params.context.mlsData,
+          propertyFacts: params.context.propertyFacts as EventPropertyFacts | undefined,
+          nearbyPoi: params.context.nearbyPoi,
+          agentNotes: params.context.agentNotes ?? undefined,
+        },
+      },
+      params.userMessage,
+      params.language
+    )
+  );
 
   const sources = sourceKeys
     .map((key) => sourceCatalog.find((item) => item.key === key))
@@ -676,8 +829,90 @@ export async function chatWithProperty(
     }));
 
   return {
-    reply: parsed.answer || "I do not have enough reliable information to answer that clearly. Please confirm with the listing agent.",
-    tokensUsed: result.tokensUsed,
+    parsed,
+    answerQuality,
+    suggestedPrompts,
+    reply:
+      parsed.answer ||
+      getQaUiCopy(params.language).fallbackReply,
     sources,
+    tokensUsed: result.tokensUsed,
+  };
+}
+
+export async function chatWithProperty(
+  context: PropertyContext,
+  userMessage: string,
+  history: ChatHistory[] = []
+): Promise<{
+  reply: string;
+  tokensUsed: number;
+  sources: PropertyQaSource[];
+  suggestedPrompts: string[];
+  answerQuality: AnswerQuality;
+  usedWebSearch: boolean;
+  language: SupportedQaLanguage;
+}> {
+  const conversationLanguage = detectPreferredQaLanguage({
+    text: [...history.filter((item) => item.role === "user").map((item) => item.content), userMessage]
+      .filter(Boolean)
+      .join("\n"),
+  });
+  let webSearchResults: WebSearchResult[] = [];
+
+  if (shouldUseWebSearch(userMessage, context)) {
+    const webSearchPlan = buildWebSearchPlan(context, userMessage);
+    try {
+      webSearchResults = await searchPublicWeb(webSearchPlan.query, {
+        includeDomains: webSearchPlan.includeDomains,
+      });
+    } catch {
+      webSearchResults = [];
+    }
+  }
+
+  let attempt = await runModelAnswer({
+    context,
+    userMessage,
+    history,
+    webSearchResults,
+    language: conversationLanguage,
+  });
+
+  let totalTokens = attempt.tokensUsed;
+
+  if (hasWebSearchConfiguration() && shouldRetryWithBroaderSearch(attempt.parsed, attempt.sources.map((item) => item.key), webSearchResults)) {
+    const recoveryPlan = buildRecoveryWebSearchPlan(context, userMessage);
+
+    try {
+      const recoverySearchResults = await searchPublicWeb(recoveryPlan.query, {
+        includeDomains: recoveryPlan.includeDomains,
+      });
+      webSearchResults = mergeWebSearchResults(webSearchResults, recoverySearchResults);
+    } catch {}
+
+    if (webSearchResults.length > 0) {
+      const recoveryAttempt = await runModelAnswer({
+        context,
+        userMessage,
+        history,
+        webSearchResults,
+        secondPass: true,
+        language: conversationLanguage,
+      });
+
+      totalTokens += recoveryAttempt.tokensUsed;
+      attempt = recoveryAttempt;
+    }
+  }
+
+  return {
+    reply: attempt.reply,
+    tokensUsed: totalTokens,
+    sources: attempt.sources,
+    suggestedPrompts: attempt.suggestedPrompts,
+    answerQuality: attempt.answerQuality,
+    usedWebSearch: attempt.sources.some((source) => source.kind === "public_web"),
+    language: conversationLanguage,
   };
 }

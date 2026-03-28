@@ -335,6 +335,10 @@ export async function POST(
         return NextResponse.json({
             reply: result.reply,
             sources: result.sources,
+            suggestedPrompts: result.suggestedPrompts,
+            answerQuality: result.answerQuality,
+            usedWebSearch: result.usedWebSearch,
+            language: result.language,
             sessionId,
             tokensUsed: result.tokensUsed,
             featureAccessTier,

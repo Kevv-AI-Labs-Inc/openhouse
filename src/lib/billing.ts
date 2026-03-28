@@ -11,18 +11,52 @@ import { getDb } from "@/lib/db";
 import { events, signIns, users, type User } from "@/lib/db/schema";
 import { absoluteUrl } from "@/lib/site";
 import { isStripeConfigured } from "@/lib/stripe";
+import {
+  hasInternalVipAccess,
+  normalizeStoredPlanTier,
+  resolvePlanTier,
+} from "@/lib/account-access";
 
-export function normalizePlanTier(tier: string | null | undefined): PlanTier {
-  return tier === "pro" ? "pro" : "free";
-}
+export { hasInternalVipAccess, resolvePlanTier };
+export const normalizePlanTier = normalizeStoredPlanTier;
 
-export function getPlanEntitlements(tier: PlanTier) {
+function getPlanUsageEntitlements(tier: PlanTier) {
   const limits = PLAN_LIMITS[tier];
 
   return {
-    subscriptionTier: tier,
     pdlCreditsLimit: limits.pdlCredits,
     aiQueriesLimit: limits.aiQueries,
+  };
+}
+
+function applyEffectivePlanView<T extends Pick<User, "subscriptionTier" | "email"> & {
+  pdlCreditsLimit: number;
+  aiQueriesLimit: number;
+}>(user: T): T {
+  const effectiveTier = resolvePlanTier({
+    subscriptionTier: user.subscriptionTier,
+    email: user.email,
+  });
+
+  if (
+    effectiveTier === normalizePlanTier(user.subscriptionTier) &&
+    user.pdlCreditsLimit === getPlanUsageEntitlements(effectiveTier).pdlCreditsLimit &&
+    user.aiQueriesLimit === getPlanUsageEntitlements(effectiveTier).aiQueriesLimit
+  ) {
+    return user;
+  }
+
+  return {
+    ...user,
+    subscriptionTier: effectiveTier,
+    ...getPlanUsageEntitlements(effectiveTier),
+  };
+}
+
+export function getPlanEntitlements(tier: PlanTier) {
+  return {
+    subscriptionTier: tier,
+    ...getPlanUsageEntitlements(tier),
   };
 }
 
@@ -34,13 +68,20 @@ export function getTrialProExpiry(now = new Date()) {
 
 export function resolveFeatureAccessTier(params: {
   subscriptionTier: string | null | undefined;
+  accountEmail?: string | null;
   eventFeatureAccessTier: string | null | undefined;
   proTrialExpiresAt?: Date | null;
   now?: Date;
 }): FeatureAccessTier {
-  const { subscriptionTier, eventFeatureAccessTier, proTrialExpiresAt, now = new Date() } = params;
+  const {
+    subscriptionTier,
+    accountEmail,
+    eventFeatureAccessTier,
+    proTrialExpiresAt,
+    now = new Date(),
+  } = params;
 
-  if (normalizePlanTier(subscriptionTier) === "pro") {
+  if (resolvePlanTier({ subscriptionTier, email: accountEmail }) === "pro") {
     return "pro";
   }
 
@@ -57,6 +98,7 @@ export function resolveFeatureAccessTier(params: {
 
 export function hasProFeatureAccess(params: {
   subscriptionTier: string | null | undefined;
+  accountEmail?: string | null;
   eventFeatureAccessTier: string | null | undefined;
   proTrialExpiresAt?: Date | null;
   now?: Date;
@@ -93,16 +135,19 @@ export async function ensureUsageWindow(userId: number) {
     return null;
   }
 
-  const tier = normalizePlanTier(user.subscriptionTier);
+  const tier = resolvePlanTier({
+    subscriptionTier: user.subscriptionTier,
+    email: user.email,
+  });
   const now = new Date();
   const resetNeeded = !user.usageResetAt || user.usageResetAt <= now;
-  const entitlements = getPlanEntitlements(tier);
+  const entitlements = getPlanUsageEntitlements(tier);
   const limitsNeedRepair =
     user.pdlCreditsLimit !== entitlements.pdlCreditsLimit ||
     user.aiQueriesLimit !== entitlements.aiQueriesLimit;
 
   if (!resetNeeded && !limitsNeedRepair) {
-    return user;
+    return applyEffectivePlanView(user);
   }
 
   const nextResetAt = resetNeeded
@@ -120,7 +165,7 @@ export async function ensureUsageWindow(userId: number) {
     .where(eq(users.id, userId));
 
   const [updatedUser] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-  return updatedUser ?? user;
+  return applyEffectivePlanView(updatedUser ?? user);
 }
 
 export async function countEventsThisMonth(userId: number) {
@@ -155,7 +200,10 @@ export async function getBillingSnapshot(userId: number) {
     return null;
   }
 
-  const tier = normalizePlanTier(user.subscriptionTier);
+  const tier = resolvePlanTier({
+    subscriptionTier: user.subscriptionTier,
+    email: user.email,
+  });
   const limits = PLAN_LIMITS[tier];
   const [eventsUsed, signInsUsed] = await Promise.all([
     countEventsThisMonth(userId),
@@ -163,8 +211,9 @@ export async function getBillingSnapshot(userId: number) {
   ]);
 
   return {
-    user,
+    user: applyEffectivePlanView(user),
     tier,
+    internalVipAccess: hasInternalVipAccess(user.email),
     limits,
     eventsUsed,
     signInsUsed,
@@ -191,7 +240,12 @@ export async function allocateTrialProLaunch(params: {
     return null;
   }
 
-  if (normalizePlanTier(user.subscriptionTier) === "pro") {
+  if (
+    resolvePlanTier({
+      subscriptionTier: user.subscriptionTier,
+      email: user.email,
+    }) === "pro"
+  ) {
     await db
       .update(events)
       .set({
@@ -344,19 +398,24 @@ export async function syncSubscriptionState(
   const configuredProPriceId = process.env.STRIPE_PRO_PRICE_ID;
   const isActiveSubscription =
     subscription.status === "active" || subscription.status === "trialing";
-  const tier: PlanTier =
+  const subscriptionTier: PlanTier =
     isActiveSubscription && configuredProPriceId && priceId === configuredProPriceId
       ? "pro"
       : "free";
-  const entitlements = getPlanEntitlements(tier);
+  const effectiveTier = resolvePlanTier({
+    subscriptionTier,
+    email: user.email,
+  });
+  const usageEntitlements = getPlanUsageEntitlements(effectiveTier);
   const periodEnd = getSubscriptionPeriodEnd(subscription)
     ? new Date(getSubscriptionPeriodEnd(subscription)! * 1000)
-    : getDefaultUsageResetAt(tier);
+    : getDefaultUsageResetAt(effectiveTier);
 
   await db
     .update(users)
     .set({
-      ...entitlements,
+      subscriptionTier,
+      ...usageEntitlements,
       stripeCustomerId: customerId,
       stripeSubscriptionId: subscription.id,
       usageResetAt: periodEnd,
@@ -365,7 +424,7 @@ export async function syncSubscriptionState(
     })
     .where(eq(users.id, user.id));
 
-  if (tier === "free") {
+  if (effectiveTier === "free") {
     await db.update(events).set({ aiQaEnabled: false }).where(eq(events.userId, user.id));
     if (user.followUpEmailMode === "custom_domain") {
       await db.update(users).set({ followUpEmailMode: "draft" }).where(eq(users.id, user.id));
@@ -375,36 +434,43 @@ export async function syncSubscriptionState(
 
 export async function downgradeUserToFreeByCustomer(customerId: string) {
   const db = getDb();
-  const entitlements = getPlanEntitlements("free");
+  const [user] = await db
+    .select({
+      id: users.id,
+      email: users.email,
+      followUpEmailMode: users.followUpEmailMode,
+    })
+    .from(users)
+    .where(eq(users.stripeCustomerId, customerId))
+    .limit(1);
+
+  const effectiveTier = resolvePlanTier({
+    subscriptionTier: "free",
+    email: user?.email,
+  });
+  const entitlements = getPlanUsageEntitlements(effectiveTier);
 
   await db
     .update(users)
     .set({
+      subscriptionTier: "free",
       ...entitlements,
       stripeCustomerId: customerId,
       stripeSubscriptionId: null,
-      usageResetAt: getDefaultUsageResetAt("free"),
+      usageResetAt: getDefaultUsageResetAt(effectiveTier),
       pdlCreditsUsed: 0,
       aiQueriesUsed: 0,
     })
     .where(eq(users.stripeCustomerId, customerId));
 
-  const [user] = await db.select({ id: users.id }).from(users).where(eq(users.stripeCustomerId, customerId)).limit(1);
-
-  if (user) {
+  if (user && effectiveTier === "free") {
     await db.update(events).set({ aiQaEnabled: false }).where(eq(events.userId, user.id));
-    const [currentUser] = await db
-      .select({ followUpEmailMode: users.followUpEmailMode })
-      .from(users)
-      .where(eq(users.id, user.id))
-      .limit(1);
-
-    if (currentUser?.followUpEmailMode === "custom_domain") {
+    if (user.followUpEmailMode === "custom_domain") {
       await db.update(users).set({ followUpEmailMode: "draft" }).where(eq(users.id, user.id));
     }
   }
 }
 
-export function isBillingEnabledForUser(user: Pick<User, "subscriptionTier">) {
-  return normalizePlanTier(user.subscriptionTier) === "pro";
+export function isBillingEnabledForUser(user: Pick<User, "subscriptionTier" | "email">) {
+  return resolvePlanTier(user) === "pro";
 }

@@ -9,7 +9,7 @@ import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { magicLinks, users } from "@/lib/db/schema";
-import { getPlanEntitlements, getNextMonthBoundary } from "@/lib/billing";
+import { getPlanEntitlements, getNextMonthBoundary, resolvePlanTier } from "@/lib/billing";
 import {
   getGoogleClientId,
   getGoogleClientSecret,
@@ -202,7 +202,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
           if (dbUser) {
             token.userId = dbUser.id;
-            token.subscriptionTier = dbUser.subscriptionTier;
+            token.subscriptionTier = resolvePlanTier({
+              subscriptionTier: dbUser.subscriptionTier,
+              email: dbUser.email,
+            });
           }
         } catch (error) {
           console.error("[Auth] JWT sync failed:", error);

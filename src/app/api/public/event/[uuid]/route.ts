@@ -115,6 +115,7 @@ export async function GET(
 
     const [owner] = await db
         .select({
+            email: users.email,
             subscriptionTier: users.subscriptionTier,
         })
         .from(users)
@@ -123,6 +124,7 @@ export async function GET(
 
     const featureAccessTier = resolveFeatureAccessTier({
         subscriptionTier: owner?.subscriptionTier,
+        accountEmail: owner?.email,
         eventFeatureAccessTier: event.featureAccessTier,
         proTrialExpiresAt: event.proTrialExpiresAt,
     });
@@ -130,6 +132,7 @@ export async function GET(
         event.aiQaEnabled &&
         hasProFeatureAccess({
             subscriptionTier: owner?.subscriptionTier,
+            accountEmail: owner?.email,
             eventFeatureAccessTier: event.featureAccessTier,
             proTrialExpiresAt: event.proTrialExpiresAt,
         }) &&
@@ -216,6 +219,7 @@ export async function POST(
     const [ownerRecord] = await db
         .select({
             id: users.id,
+            email: users.email,
             subscriptionTier: users.subscriptionTier,
         })
         .from(users)
@@ -239,6 +243,7 @@ export async function POST(
         const tier = normalizePlanTier(owner.subscriptionTier);
         const featureAccessTier = resolveFeatureAccessTier({
             subscriptionTier: owner.subscriptionTier,
+            accountEmail: owner.email,
             eventFeatureAccessTier: event.featureAccessTier,
             proTrialExpiresAt: event.proTrialExpiresAt,
         });

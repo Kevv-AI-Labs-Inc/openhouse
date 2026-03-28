@@ -26,6 +26,7 @@ type FollowUpEmailMode = "draft" | "google" | "microsoft" | "custom_domain";
 
 type BillingStatus = {
   tier: "free" | "pro";
+  internalVipAccess: boolean;
   stripeConfigured: boolean;
   googleAuthConfigured: boolean;
   microsoftAuthConfigured: boolean;
@@ -59,6 +60,8 @@ type BillingStatus = {
   aiQueriesUsed: number;
   aiQueriesLimit: number;
   usageResetAt: string | null;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
   limits: {
     maxEventsPerMonth: number | null;
     maxSignInsPerMonth: number | null;
@@ -254,6 +257,10 @@ export default function SettingsPage() {
 
   const isPro = billingStatus?.tier === "pro";
   const stripeReady = billingStatus?.stripeConfigured ?? false;
+  const billingPortalAvailable =
+    stripeReady &&
+    !billingStatus?.internalVipAccess &&
+    Boolean(billingStatus?.stripeCustomerId);
 
   const currentSenderLabel = useMemo(() => {
     if (!billingStatus) {
@@ -1082,29 +1089,35 @@ export default function SettingsPage() {
                     </div>
                   </div>
 
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={!stripeReady || action === "portal"}
-                    onClick={async () => {
-                      try {
-                        setAction("portal");
-                        await redirectToBilling("/api/billing/portal");
-                      } catch (error) {
-                        const message =
-                          error instanceof Error ? error.message : "Unable to open billing portal";
-                        toast.error(message);
-                        setAction(null);
-                      }
-                    }}
-                  >
-                    {action === "portal" ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <CreditCard className="mr-2 h-4 w-4" />
-                    )}
-                    Manage Billing
-                  </Button>
+                  {billingStatus?.internalVipAccess ? (
+                    <p className="text-xs text-muted-foreground">
+                      This account has internal VIP access. Pro features stay enabled without a Stripe subscription.
+                    </p>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!billingPortalAvailable || action === "portal"}
+                      onClick={async () => {
+                        try {
+                          setAction("portal");
+                          await redirectToBilling("/api/billing/portal");
+                        } catch (error) {
+                          const message =
+                            error instanceof Error ? error.message : "Unable to open billing portal";
+                          toast.error(message);
+                          setAction(null);
+                        }
+                      }}
+                    >
+                      {action === "portal" ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <CreditCard className="mr-2 h-4 w-4" />
+                      )}
+                      Manage Billing
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-4">

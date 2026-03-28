@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PublicTrustFooter } from "@/components/public-trust-footer";
 import { Separator } from "@/components/ui/separator";
+import type { SellerReportAccess } from "@/lib/plans";
 import { formatPublicModeLabel, inferCaptureMode } from "@/lib/public-mode";
 import { isBehaviorQualifiedLead, type SellerReportEvent } from "@/lib/seller-report";
 import { buildSellerReportMetrics } from "@/lib/seller-report-metrics";
@@ -30,6 +31,7 @@ import {
 type Props = {
   event: SellerReportEvent;
   isPublic?: boolean;
+  reportAccess?: SellerReportAccess;
   shareUrl?: string;
   csvUrl?: string;
 };
@@ -90,7 +92,14 @@ function getComparisonTone(delta: number | null) {
   };
 }
 
-export function SellerReportView({ event, isPublic = false, shareUrl, csvUrl }: Props) {
+export function SellerReportView({
+  event,
+  isPublic = false,
+  reportAccess = "detailed",
+  shareUrl,
+  csvUrl,
+}: Props) {
+  const isDetailedReport = isPublic || reportAccess === "detailed";
   const signIns = event.signIns || [];
   const attributedSignIns = signIns.map((signIn) => ({
     ...signIn,
@@ -237,6 +246,7 @@ export function SellerReportView({ event, isPublic = false, shareUrl, csvUrl }: 
   };
 
   const showBack = !isPublic;
+  const reportTitle = isDetailedReport ? "Seller Report" : "Listing Recap";
 
   return (
     <div className="space-y-6">
@@ -252,12 +262,20 @@ export function SellerReportView({ event, isPublic = false, shareUrl, csvUrl }: 
           ) : null}
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold">Seller Report</h1>
+              <h1 className="text-2xl font-bold">{reportTitle}</h1>
               {isPublic ? (
                 <Badge className="border-emerald-500/20 bg-emerald-500/10 text-emerald-700">
                   Shared View
                 </Badge>
-              ) : null}
+              ) : isDetailedReport ? (
+                <Badge className="border-emerald-500/20 bg-emerald-500/10 text-emerald-700">
+                  Seller-ready
+                </Badge>
+              ) : (
+                <Badge className="border-border/70 bg-card/60 text-muted-foreground">
+                  Internal recap
+                </Badge>
+              )}
             </div>
             <p className="text-sm text-muted-foreground">{event.propertyAddress}</p>
             {isPublic ? (
@@ -266,7 +284,9 @@ export function SellerReportView({ event, isPublic = false, shareUrl, csvUrl }: 
               </p>
             ) : (
               <p className="mt-1 text-xs text-muted-foreground">
-                Shareable seller view keeps contact details hidden by default.
+                {isDetailedReport
+                  ? "Shareable seller view keeps contact details hidden by default."
+                  : "Free accounts keep this page as an internal recap until Pro or a trial launch unlocks seller sharing."}
               </p>
             )}
           </div>
@@ -276,17 +296,17 @@ export function SellerReportView({ event, isPublic = false, shareUrl, csvUrl }: 
             <Printer className="mr-2 h-4 w-4" />
             Print
           </Button>
-          {!isPublic ? (
+          {!isPublic && isDetailedReport && shareUrl ? (
             <Button variant="outline" size="sm" onClick={copyShareLink}>
               <Share2 className="mr-2 h-4 w-4" />
               Copy Shared Link
             </Button>
-          ) : (
+          ) : isPublic ? (
             <Button variant="outline" size="sm" onClick={copyShareLink}>
               <Share2 className="mr-2 h-4 w-4" />
               Copy Link
             </Button>
-          )}
+          ) : null}
           {!isPublic && csvUrl ? (
             <Button variant="outline" size="sm" onClick={() => window.open(csvUrl, "_blank", "noopener,noreferrer")}>
               <Download className="mr-2 h-4 w-4" />
@@ -329,6 +349,30 @@ export function SellerReportView({ event, isPublic = false, shareUrl, csvUrl }: 
         <Card><CardContent className="p-4 text-center"><Share2 className="mx-auto mb-2 h-6 w-6 text-teal-500" /><div className="text-3xl font-bold">{listingInquiryCaptures}</div><div className="text-xs text-muted-foreground">Long-Term Link Leads</div></CardContent></Card>
       </div>
 
+      {!isDetailedReport ? (
+        <Card className="border-amber-500/20 bg-gradient-to-br from-amber-500/5 to-orange-500/5">
+          <CardHeader>
+            <CardTitle className="text-base">Basic Recap</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm text-muted-foreground">
+            <p>
+              Free accounts keep seller reporting in the dashboard as an internal recap. Shared
+              links, AI narrative, and post-event demand storytelling unlock on Pro and on eligible
+              trial launches.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Link href="/dashboard/settings">
+                <Button size="sm">Unlock Seller Report</Button>
+              </Link>
+              <p className="text-xs text-muted-foreground">
+                Your first 3 published launches still unlock the full seller-facing version.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {isDetailedReport ? (
       <Card className="border-border/60 bg-gradient-to-br from-background via-card/70 to-muted/20">
         <CardHeader><CardTitle className="text-base">Executive Summary</CardTitle></CardHeader>
         <CardContent className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
@@ -353,8 +397,9 @@ export function SellerReportView({ event, isPublic = false, shareUrl, csvUrl }: 
           </div>
         </CardContent>
       </Card>
+      ) : null}
 
-      {!isPublic && benchmark ? (
+      {!isPublic && isDetailedReport && benchmark ? (
         <Card className="border-border/60 bg-card/60">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Portfolio Benchmark</CardTitle>
@@ -440,6 +485,7 @@ export function SellerReportView({ event, isPublic = false, shareUrl, csvUrl }: 
         </CardContent>
       </Card>
 
+      {isDetailedReport ? (
       <Card className="border-border/60 bg-card/60">
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Demand Curve</CardTitle>
@@ -537,7 +583,9 @@ export function SellerReportView({ event, isPublic = false, shareUrl, csvUrl }: 
           </div>
         </CardContent>
       </Card>
+      ) : null}
 
+      {isDetailedReport ? (
       <Card>
         <CardHeader><CardTitle className="text-base">Seller Talking Points</CardTitle></CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-3">
@@ -549,7 +597,9 @@ export function SellerReportView({ event, isPublic = false, shareUrl, csvUrl }: 
           ))}
         </CardContent>
       </Card>
+      ) : null}
 
+      {isDetailedReport ? (
       <Card>
         <CardHeader><CardTitle className="text-base">Lead Attribution</CardTitle></CardHeader>
         <CardContent className="space-y-4">
@@ -566,6 +616,7 @@ export function SellerReportView({ event, isPublic = false, shareUrl, csvUrl }: 
           </div>
         </CardContent>
       </Card>
+      ) : null}
 
       {Object.keys(hourMap).length > 0 ? (
         <Card>

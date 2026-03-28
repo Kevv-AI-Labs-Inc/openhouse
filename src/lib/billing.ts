@@ -6,6 +6,7 @@ import {
   isProLikeFeatureAccess,
   type FeatureAccessTier,
   type PlanTier,
+  type SellerReportAccess,
 } from "@/lib/plans";
 import { getDb } from "@/lib/db";
 import { events, signIns, users, type User } from "@/lib/db/schema";
@@ -104,6 +105,25 @@ export function hasProFeatureAccess(params: {
   now?: Date;
 }) {
   return isProLikeFeatureAccess(resolveFeatureAccessTier(params));
+}
+
+export function getSellerReportAccess(params: {
+  subscriptionTier: string | null | undefined;
+  accountEmail?: string | null;
+  eventFeatureAccessTier: string | null | undefined;
+  proTrialExpiresAt?: Date | null;
+  now?: Date;
+}): SellerReportAccess {
+  if (hasProFeatureAccess(params)) {
+    return "detailed";
+  }
+
+  const tier = resolvePlanTier({
+    subscriptionTier: params.subscriptionTier,
+    email: params.accountEmail,
+  });
+
+  return PLAN_LIMITS[tier].sellerReport;
 }
 
 export function getNextMonthBoundary(now = new Date()) {

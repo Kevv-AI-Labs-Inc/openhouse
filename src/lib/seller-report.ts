@@ -1,3 +1,5 @@
+import type { SellerReportAccess } from "@/lib/plans";
+
 export interface SellerReportLeadScore {
   overallScore: number;
   tier: string;
@@ -69,6 +71,7 @@ export interface SellerReportEvent {
   funnelMetrics: SellerReportFunnelMetrics;
   activitySeries: SellerReportActivityPoint[];
   benchmark: SellerReportBenchmark | null;
+  reportAccess?: SellerReportAccess;
 }
 
 export function isBehaviorQualifiedLead(signIn: SellerReportSignIn) {

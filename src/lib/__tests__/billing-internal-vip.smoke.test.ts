@@ -1,4 +1,5 @@
 import {
+  getSellerReportAccess,
   hasInternalVipAccess,
   hasProFeatureAccess,
   resolveFeatureAccessTier,
@@ -61,5 +62,34 @@ describe("internal vip billing smoke", () => {
         proTrialExpiresAt: new Date(Date.now() + 60_000),
       })
     ).toBe("trial_pro");
+  });
+
+  it("keeps seller report sharing gated for free while honoring trial and pro access", () => {
+    expect(
+      getSellerReportAccess({
+        subscriptionTier: "free",
+        accountEmail: "agent@example.com",
+        eventFeatureAccessTier: "free",
+      })
+    ).toBe("basic");
+
+    expect(
+      getSellerReportAccess({
+        subscriptionTier: "free",
+        accountEmail: "agent@example.com",
+        eventFeatureAccessTier: "trial_pro",
+        proTrialExpiresAt: new Date(Date.now() + 60_000),
+      })
+    ).toBe("detailed");
+
+    process.env.INTERNAL_VIP_EMAILS = "founder@example.com";
+
+    expect(
+      getSellerReportAccess({
+        subscriptionTier: "free",
+        accountEmail: "founder@example.com",
+        eventFeatureAccessTier: "free",
+      })
+    ).toBe("detailed");
   });
 });

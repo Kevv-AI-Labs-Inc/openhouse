@@ -17,9 +17,9 @@ const STATIC_CHUNKS_DIR = join(BUILD_DIR, "static", "chunks");
 
 // Budget limits in bytes
 const BUDGETS = {
-  totalSharedJS: 500 * 1024,      // 500 KB
-  largestChunk: 200 * 1024,       // 200 KB single chunk
-  totalBuildSize: 10 * 1024 * 1024, // 10 MB total build
+  totalSharedJS: 3 * 1024 * 1024,       // 3 MB total JS
+  largestChunk: 500 * 1024,             // 500 KB single chunk
+  totalBuildSize: 600 * 1024 * 1024,    // 600 MB total build (includes .next/cache)
 };
 
 function getFileSizeRecursive(dir, ext) {

@@ -14,8 +14,9 @@ permissions:
   contents: read
 
 jobs:
-  validate:
-    name: Validate
+  # ─── Gate 1: Static analysis ───
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
     env:
       CI: true
@@ -33,8 +34,28 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint
+      - name: ESLint
         run: npm run lint
+
+  # ─── Gate 2: Unit & integration tests ───
+  test-unit:
+    name: Unit & Smoke Tests
+    runs-on: ubuntu-latest
+    env:
+      CI: true
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Run smoke tests
         run: npm run test:smoke
@@ -42,11 +63,73 @@ jobs:
       - name: Run critical tests
         run: npm run test:critical
 
-      - name: Build
+  # ─── Gate 3: Build + bundle budget + E2E + a11y + perf ───
+  build-and-e2e:
+    name: Build & E2E
+    needs: [lint, test-unit]
+    runs-on: ubuntu-latest
+    env:
+      CI: true
+      NEXT_TELEMETRY_DISABLED: 1
+      AUTH_SECRET: ci-auth-secret-for-tests-only-0123456789
+      AUTH_TRUST_HOST: true
+      NEXTAUTH_URL: http://127.0.0.1:3210
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3210
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build production bundle
         run: npm run build
+
+      - name: Check bundle size budget
+        run: npm run test:bundle-size
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Run e2e tests
-        run: npm run test:e2e
+      - name: Run E2E smoke tests
+        run: npx playwright test e2e/public-signin.spec.ts e2e/landing-page.spec.ts e2e/dashboard-navigation.spec.ts e2e/kiosk-signin.spec.ts
+
+      - name: Run accessibility tests
+        run: npx playwright test e2e/accessibility.spec.ts
+
+      - name: Run performance tests
+        run: npx playwright test e2e/performance.spec.ts
+
+      - name: Upload test results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: test-results/
+          retention-days: 7
+
+  validate:
+    name: Validate
+    needs: [lint, test-unit, build-and-e2e]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Verify required checks
+        run: |
+          echo "Lint: ${{ needs.lint.result }}"
+          echo "Unit & Smoke Tests: ${{ needs.test-unit.result }}"
+          echo "Build & E2E: ${{ needs.build-and-e2e.result }}"
+
+          if [[ "${{ needs.lint.result }}" != "success" || "${{ needs.test-unit.result }}" != "success" || "${{ needs.build-and-e2e.result }}" != "success" ]]; then
+            echo "One or more required checks failed."
+            exit 1
+          fi
+
+          echo "All required checks passed."

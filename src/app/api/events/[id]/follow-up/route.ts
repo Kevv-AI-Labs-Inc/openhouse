@@ -29,6 +29,7 @@ import {
   parseStoredFollowUpDraft,
   serializeStoredFollowUpDraft,
 } from "@/lib/follow-up-draft";
+import { markSignInPendingKevvSync } from "@/lib/kevv-sync";
 
 type DeliveryMode = FollowUpEmailMode;
 
@@ -421,6 +422,10 @@ export async function POST(
           followUpSentAt: followUpSent ? new Date() : null,
         })
         .where(eq(signIns.id, signIn.id));
+
+      await markSignInPendingKevvSync(signIn.id).catch((error) => {
+        console.error("[KevvSync] Failed to re-queue sign-in after follow-up update:", error);
+      });
 
       results.push({
         signInId: signIn.id,

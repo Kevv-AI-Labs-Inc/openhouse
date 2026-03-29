@@ -32,6 +32,7 @@ describe("property qa insights smoke", () => {
 
     expect(insights.level).toBe("strong");
     expect(insights.score).toBeGreaterThanOrEqual(75);
+    expect(insights.publishReadiness.status).toBe("ready");
     expect(insights.suggestedQuestions).toContain(
       "What taxes, HOA, or monthly carrying costs should buyers know?"
     );
@@ -47,8 +48,12 @@ describe("property qa insights smoke", () => {
     });
 
     expect(insights.level).toBe("thin");
+    expect(insights.publishReadiness.status).toBe("blocked");
     expect(insights.suggestedQuestions.length).toBeGreaterThanOrEqual(3);
     expect(insights.missingLabels).toContain("Taxes and carry");
+    expect(insights.publishReadiness.recommendedActions).toContain(
+      "Add at least a few custom FAQ answers or agent notes before relying on the public chat."
+    );
   });
 
   it("builds recovery prompts away from the missing topic when possible", () => {

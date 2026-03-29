@@ -42,6 +42,15 @@ export type PropertyQaInsights = {
   categories: PropertyQaCoverageCategory[];
   missingLabels: string[];
   suggestedQuestions: string[];
+  publishReadiness: PropertyQaPublishReadiness;
+};
+
+export type PropertyQaPublishReadiness = {
+  status: "ready" | "review" | "blocked";
+  label: string;
+  summary: string;
+  warnings: string[];
+  recommendedActions: string[];
 };
 
 export type PropertyQaTopic =
@@ -250,6 +259,7 @@ export function getPropertyQaInsights(
   const score = Math.round((readyCount / totalCount) * 100);
   const level: PropertyQaCoverageLevel =
     score >= 75 ? "strong" : score >= 45 ? "partial" : "thin";
+  const publishReadiness = buildPropertyQaPublishReadiness(categories, score);
 
   return {
     score,
@@ -259,6 +269,114 @@ export function getPropertyQaInsights(
     categories,
     missingLabels: categories.filter((category) => !category.ready).map((category) => category.label),
     suggestedQuestions: buildSuggestedQuestionsFromCategories(categories, language),
+    publishReadiness,
+  };
+}
+
+function buildPropertyQaPublishReadiness(
+  categories: PropertyQaCoverageCategory[],
+  score: number
+): PropertyQaPublishReadiness {
+  const categoryMap = new Map(categories.map((category) => [category.key, category]));
+  const ready = (key: PropertyQaCoverageKey) => categoryMap.get(key)?.ready ?? false;
+  const missing = (key: PropertyQaCoverageKey) => categoryMap.get(key)?.label ?? key;
+  const warnings: string[] = [];
+  const recommendedActions: string[] = [];
+
+  const addAction = (action: string) => {
+    if (!recommendedActions.includes(action)) {
+      recommendedActions.push(action);
+    }
+  };
+
+  if (!ready("core")) {
+    warnings.push("Core listing facts are still too thin for reliable public AI answers.");
+    addAction("Confirm the address, price, description, beds, baths, and square footage before publishing.");
+  }
+
+  if (!ready("agentPrep")) {
+    warnings.push("The AI still lacks agent-prepared FAQ answers or notes for common buyer questions.");
+    addAction("Add at least a few custom FAQ answers or agent notes before relying on the public chat.");
+  }
+
+  if (!ready("financial")) {
+    addAction("Add taxes, HOA, maintenance, or monthly carrying cost details.");
+  }
+
+  if (!ready("building")) {
+    addAction("Add amenities, laundry, parking, pet, and service details.");
+  }
+
+  if (!ready("neighborhood")) {
+    addAction("Add neighborhood highlights, nearby transit, and convenience context.");
+  }
+
+  if (!ready("schools")) {
+    addAction("Add school district references if buyers are likely to ask about them.");
+  }
+
+  if (!ready("policies")) {
+    addAction("Document sublet, financing, pied-a-terre, or occupancy policies if they matter for this listing.");
+  }
+
+  if (!ready("interior")) {
+    addAction("Add appliances and major system details so the AI can answer interior questions more confidently.");
+  }
+
+  const missingSupport = ["financial", "building", "neighborhood", "schools", "policies", "interior"].filter(
+    (key) => !ready(key as PropertyQaCoverageKey)
+  );
+  const hasBlockingGap = !ready("core") || score < 45;
+  const needsReview =
+    !hasBlockingGap &&
+    (!ready("agentPrep") || missingSupport.length >= 3 || score < 70);
+
+  if (hasBlockingGap) {
+    if (missingSupport.length > 0) {
+      warnings.push(
+        `Public AI chat is likely to miss buyer questions about ${missingSupport
+          .slice(0, 3)
+          .map((key) => missing(key as PropertyQaCoverageKey).toLowerCase())
+          .join(", ")}.`
+      );
+    }
+
+    return {
+      status: "blocked",
+      label: "Blocked",
+      summary: "Publish-time AI coverage is too thin to trust for public buyer Q&A.",
+      warnings,
+      recommendedActions: recommendedActions.slice(0, 5),
+    };
+  }
+
+  if (needsReview) {
+    if (missingSupport.length > 0) {
+      warnings.push(
+        `Public AI chat can launch, but it still has visible gaps in ${missingSupport
+          .slice(0, 3)
+          .map((key) => missing(key as PropertyQaCoverageKey).toLowerCase())
+          .join(", ")}.`
+      );
+    }
+
+    return {
+      status: "review",
+      label: "Needs review",
+      summary: "Coverage is usable, but you should tighten a few buyer-facing answers before publishing.",
+      warnings,
+      recommendedActions: recommendedActions.slice(0, 5),
+    };
+  }
+
+  return {
+    status: "ready",
+    label: "Ready",
+    summary: "Coverage is strong enough to publish the public AI chat with confidence.",
+    warnings: [],
+    recommendedActions: [
+      "Keep the prepared FAQ answers current as pricing, availability, or property details change.",
+    ],
   };
 }
 

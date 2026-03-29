@@ -15,6 +15,7 @@ import {
     normalizePlanTier,
 } from "@/lib/billing";
 import { hasAiConfiguration } from "@/lib/ai/openai";
+import { getPropertyQaInsights } from "@/lib/property-qa-insights";
 
 export async function GET(
     _request: NextRequest,
@@ -140,7 +141,47 @@ export async function PUT(
         });
     }
 
-    return NextResponse.json({ success: true });
+    const nextEventShape = {
+        propertyAddress: (updateData.propertyAddress as string | undefined) ?? existing.propertyAddress,
+        listPrice:
+            (updateData.listPrice as string | null | undefined) ??
+            (existing.listPrice ? String(existing.listPrice) : null),
+        propertyDescription:
+            (updateData.propertyDescription as string | null | undefined) ??
+            existing.propertyDescription,
+        bedrooms: (updateData.bedrooms as number | null | undefined) ?? existing.bedrooms,
+        bathrooms:
+            (updateData.bathrooms as string | null | undefined) ??
+            (existing.bathrooms ? String(existing.bathrooms) : null),
+        sqft: (updateData.sqft as number | null | undefined) ?? existing.sqft,
+        yearBuilt: (updateData.yearBuilt as number | null | undefined) ?? existing.yearBuilt,
+        aiQaContext:
+            (updateData.aiQaContext as
+                | {
+                      customFaq?: Array<{ question: string; answer: string }>;
+                      mlsData?: Record<string, unknown>;
+                      propertyFacts?: Record<string, unknown>;
+                      nearbyPoi?: Record<string, unknown>;
+                      agentNotes?: string;
+                  }
+                | null
+                | undefined) ?? existing.aiQaContext,
+    };
+    const qaCoverage = getPropertyQaInsights(nextEventShape);
+    const nextAiQaEnabled =
+        typeof body.aiQaEnabled === "boolean" ? body.aiQaEnabled : existing.aiQaEnabled;
+    const publishWarnings =
+        nextAiQaEnabled &&
+        (nextStatus === "active" || nextStatus === "completed") &&
+        qaCoverage.publishReadiness.status !== "ready"
+            ? qaCoverage.publishReadiness.warnings
+            : [];
+
+    return NextResponse.json({
+        success: true,
+        qaCoverage,
+        warnings: publishWarnings,
+    });
 }
 
 export async function DELETE(

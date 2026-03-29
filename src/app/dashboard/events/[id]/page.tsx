@@ -252,13 +252,20 @@ export default function EventDetailPage({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(buildEventPayload(form)),
       });
+      const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        const data = await res.json();
         throw new Error(data.error || "Failed to save event");
       }
 
       toast.success("Event updated");
+      if (Array.isArray(data.warnings) && data.warnings.length > 0) {
+        toast.warning(data.warnings[0], {
+          description:
+            data.qaCoverage?.publishReadiness?.summary ||
+            "Public AI chat still needs a little more coverage before you publish it.",
+        });
+      }
       setEditing(false);
       fetchEvent();
     } catch (error) {
@@ -357,6 +364,12 @@ export default function EventDetailPage({
       : qaInsights.level === "partial"
         ? "border-amber-500/30 bg-amber-500/10 text-amber-700"
         : "border-slate-500/30 bg-slate-500/10 text-slate-700";
+  const qaPublishBadgeClass =
+    qaInsights.publishReadiness.status === "ready"
+      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700"
+      : qaInsights.publishReadiness.status === "review"
+        ? "border-amber-500/30 bg-amber-500/10 text-amber-700"
+        : "border-red-500/30 bg-red-500/10 text-red-700";
 
   return (
     <div className="max-w-5xl space-y-6">
@@ -486,22 +499,55 @@ export default function EventDetailPage({
             </div>
 
             <div className="rounded-3xl border border-border/60 bg-background/70 p-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                Suggested starter questions
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {qaInsights.suggestedQuestions.map((question) => (
-                  <span
-                    key={question}
-                    className="rounded-full border border-border/60 bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground"
-                  >
-                    {question}
-                  </span>
-                ))}
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    Publish-time check
+                  </p>
+                  <p className="mt-2 text-sm text-foreground/90">
+                    {qaInsights.publishReadiness.summary}
+                  </p>
+                </div>
+                <Badge className={qaPublishBadgeClass}>
+                  {qaInsights.publishReadiness.label}
+                </Badge>
               </div>
-              <p className="mt-4 text-xs text-muted-foreground">
-                If coverage is thin, re-import from MLS or flyer, or add agent notes before relying on the public chat.
-              </p>
+              {qaInsights.publishReadiness.warnings.length > 0 ? (
+                <div className="mt-4 space-y-2">
+                  {qaInsights.publishReadiness.warnings.map((warning) => (
+                    <p key={warning} className="text-xs text-muted-foreground">
+                      {warning}
+                    </p>
+                  ))}
+                </div>
+              ) : null}
+              <div className="mt-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Next best actions
+                </p>
+                <div className="mt-2 space-y-2">
+                  {qaInsights.publishReadiness.recommendedActions.map((action) => (
+                    <p key={action} className="text-xs text-muted-foreground">
+                      {action}
+                    </p>
+                  ))}
+                </div>
+              </div>
+              <div className="mt-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Suggested starter questions
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {qaInsights.suggestedQuestions.map((question) => (
+                    <span
+                      key={question}
+                      className="rounded-full border border-border/60 bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground"
+                    >
+                      {question}
+                    </span>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
 

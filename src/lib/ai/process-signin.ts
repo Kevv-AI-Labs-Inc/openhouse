@@ -10,6 +10,7 @@ import {
     type LeadScore,
 } from "@/lib/ai/lead-scoring";
 import { chatCompletion } from "@/lib/ai/openai";
+import { markSignInPendingKevvSync } from "@/lib/kevv-sync";
 import { isPro } from "@/lib/plans";
 
 interface ProcessSignInOptions {
@@ -134,6 +135,10 @@ export async function processSignInWithAi({
         .update(events)
         .set({ hotLeadsCount: hotLeads.length })
         .where(eq(events.id, eventId));
+
+    await markSignInPendingKevvSync(signInId).catch((error) => {
+        console.error("[KevvSync] Failed to re-queue sign-in after AI scoring:", error);
+    });
 
     return {
         score: finalScore,

@@ -114,3 +114,22 @@ jobs:
           name: playwright-report
           path: test-results/
           retention-days: 7
+
+  validate:
+    name: Validate
+    needs: [lint, test-unit, build-and-e2e]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Verify required checks
+        run: |
+          echo "Lint: ${{ needs.lint.result }}"
+          echo "Unit & Smoke Tests: ${{ needs.test-unit.result }}"
+          echo "Build & E2E: ${{ needs.build-and-e2e.result }}"
+
+          if [[ "${{ needs.lint.result }}" != "success" || "${{ needs.test-unit.result }}" != "success" || "${{ needs.build-and-e2e.result }}" != "success" ]]; then
+            echo "One or more required checks failed."
+            exit 1
+          fi
+
+          echo "All required checks passed."

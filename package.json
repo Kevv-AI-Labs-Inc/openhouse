@@ -7,7 +7,9 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
-    "test:smoke": "vitest run"
+    "test:smoke": "vitest run",
+    "test:critical": "vitest run --config vitest.critical.config.ts",
+    "test:e2e": "npm run build && playwright test"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.1",
@@ -37,6 +39,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@playwright/test": "^1.55.0",
     "@tailwindcss/postcss": "^4.2.2",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",

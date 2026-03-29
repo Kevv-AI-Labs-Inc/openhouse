@@ -358,7 +358,7 @@ export async function POST(
 
             signInId = Number(result.insertId);
         } catch (insertError) {
-            if (data.clientSubmissionId && isMissingClientSubmissionIdColumnError(insertError)) {
+            if (isMissingClientSubmissionIdColumnError(insertError)) {
                 console.warn("[SignIn] clientSubmissionId column missing; retrying insert without offline deduplication metadata.");
 
                 const legacyInsertValues = {

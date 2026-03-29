@@ -75,18 +75,23 @@ export async function POST(
     shouldSetCookie = true;
   }
 
-  await db
-    .insert(publicFunnelEvents)
-    .values({
-      eventId: event.id,
-      visitorId,
-      stage,
-    })
-    .onDuplicateKeyUpdate({
-      set: {
-        createdAt: sql`${publicFunnelEvents.createdAt}`,
-      },
-    });
+  try {
+    await db
+      .insert(publicFunnelEvents)
+      .values({
+        eventId: event.id,
+        visitorId,
+        stage,
+      })
+      .onDuplicateKeyUpdate({
+        set: {
+          createdAt: sql`${publicFunnelEvents.createdAt}`,
+        },
+      });
+  } catch (error) {
+    console.error("[PublicFunnel] Tracking write failed:", error);
+    return NextResponse.json({ success: true });
+  }
 
   const response = NextResponse.json({ success: true });
   if (shouldSetCookie) {

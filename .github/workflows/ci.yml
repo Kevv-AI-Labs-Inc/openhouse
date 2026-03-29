@@ -71,6 +71,7 @@ jobs:
     env:
       CI: true
       NEXT_TELEMETRY_DISABLED: 1
+      AUTH_SECRET: ci-auth-secret-for-tests-only-0123456789
       AUTH_TRUST_HOST: true
       NEXTAUTH_URL: http://127.0.0.1:3210
       NEXT_PUBLIC_APP_URL: http://127.0.0.1:3210

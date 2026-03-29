@@ -119,8 +119,8 @@ test.describe("Kiosk mode critical flows", () => {
     await mockKioskApis(page);
     await page.goto("/oh/kiosk-test-event/kiosk");
 
-    // Should show the property address
-    await expect(page.getByText("456 Oak Ave")).toBeVisible();
+    // Should show the property address in the heading
+    await expect(page.getByRole("heading", { name: /456 Oak Ave/i })).toBeVisible();
   });
 
   test("kiosk form resets after successful sign-in for next visitor", async ({ page }) => {

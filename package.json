@@ -9,9 +9,15 @@
     "db:check": "tsx scripts/check-schema-drift.ts",
     "kevv:sync": "tsx scripts/run-kevv-sync.ts",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit --project tsconfig.json --excludeDirectories 'e2e' --excludeDirectories 'src/lib/__tests__'",
     "test:smoke": "vitest run",
     "test:critical": "vitest run --config vitest.critical.config.ts",
-    "test:e2e": "npm run build && playwright test"
+    "test:e2e": "npm run build && playwright test",
+    "test:e2e:a11y": "playwright test e2e/accessibility.spec.ts",
+    "test:e2e:perf": "playwright test e2e/performance.spec.ts",
+    "test:e2e:visual": "playwright test e2e/visual-regression.spec.ts --update-snapshots",
+    "test:bundle-size": "node scripts/check-bundle-size.mjs",
+    "test:all": "npm run lint && npm run test:smoke && npm run test:critical && npm run build && npm run test:bundle-size && playwright test"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.1",

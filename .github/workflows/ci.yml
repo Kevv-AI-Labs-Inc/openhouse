@@ -14,8 +14,9 @@ permissions:
   contents: read
 
 jobs:
-  validate:
-    name: Validate
+  # ─── Gate 1: Static analysis (fastest, runs in parallel) ───
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
     env:
       CI: true
@@ -33,8 +34,28 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint
+      - name: ESLint
         run: npm run lint
+
+  # ─── Gate 2: Unit & integration tests (parallel with lint) ───
+  test-unit:
+    name: Unit & Smoke Tests
+    runs-on: ubuntu-latest
+    env:
+      CI: true
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Run smoke tests
         run: npm run test:smoke
@@ -42,11 +63,163 @@ jobs:
       - name: Run critical tests
         run: npm run test:critical
 
-      - name: Build
+  # ─── Gate 3: Build + bundle budget (depends on lint + tests) ───
+  build:
+    name: Build & Bundle Size
+    needs: [lint, test-unit]
+    runs-on: ubuntu-latest
+    env:
+      CI: true
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build production bundle
         run: npm run build
+
+      - name: Check bundle size budget
+        run: npm run test:bundle-size
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nextjs-build
+          path: .next/
+          retention-days: 1
+
+  # ─── Gate 4: E2E tests (depends on build) ───
+  test-e2e:
+    name: E2E Tests
+    needs: [build]
+    runs-on: ubuntu-latest
+    env:
+      CI: true
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: nextjs-build
+          path: .next/
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Run e2e tests
-        run: npm run test:e2e
+      - name: Run E2E smoke tests
+        run: npx playwright test e2e/public-signin.spec.ts e2e/landing-page.spec.ts e2e/dashboard-navigation.spec.ts e2e/kiosk-signin.spec.ts
+
+      - name: Upload E2E test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: test-results/
+          retention-days: 7
+
+  # ─── Gate 5: Accessibility tests (parallel with e2e) ───
+  test-a11y:
+    name: Accessibility Tests
+    needs: [build]
+    runs-on: ubuntu-latest
+    env:
+      CI: true
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: nextjs-build
+          path: .next/
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run accessibility tests
+        run: npx playwright test e2e/accessibility.spec.ts
+
+  # ─── Gate 6: Performance tests (parallel with e2e) ───
+  test-perf:
+    name: Performance Tests
+    needs: [build]
+    runs-on: ubuntu-latest
+    env:
+      CI: true
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: nextjs-build
+          path: .next/
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run performance tests
+        run: npx playwright test e2e/performance.spec.ts
+
+  # ─── Final: Aggregate status check for branch protection ───
+  validate:
+    name: Validate
+    needs: [lint, test-unit, build, test-e2e, test-a11y, test-perf]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Check all jobs passed
+        run: |
+          if [[ "${{ needs.lint.result }}" != "success" ]] || \
+             [[ "${{ needs.test-unit.result }}" != "success" ]] || \
+             [[ "${{ needs.build.result }}" != "success" ]] || \
+             [[ "${{ needs.test-e2e.result }}" != "success" ]] || \
+             [[ "${{ needs.test-a11y.result }}" != "success" ]] || \
+             [[ "${{ needs.test-perf.result }}" != "success" ]]; then
+            echo "❌ One or more CI gates failed"
+            exit 1
+          fi
+          echo "✅ All CI gates passed"

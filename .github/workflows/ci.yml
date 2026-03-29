@@ -71,6 +71,10 @@ jobs:
     env:
       CI: true
       NEXT_TELEMETRY_DISABLED: 1
+      AUTH_TRUST_HOST: true
+      NEXTAUTH_URL: http://127.0.0.1:3210
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3210
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
     steps:
       - name: Check out repository
         uses: actions/checkout@v6

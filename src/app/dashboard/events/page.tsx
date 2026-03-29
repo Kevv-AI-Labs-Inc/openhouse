@@ -308,7 +308,7 @@ export default function EventsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Open Houses</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Open Houses</h1>
           <p className="mt-1 text-muted-foreground">
             Import the listing once, publish one reusable link, and keep seller reporting tight.
             Free workspaces get Pro features on their first 3 published launches.
@@ -556,7 +556,7 @@ export default function EventsPage() {
       </div>
 
       {!loading ? (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Card className="border-border/60 bg-card/70">
             <CardContent className="p-5">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
@@ -564,7 +564,7 @@ export default function EventsPage() {
               </p>
               <div className="mt-3 flex items-center gap-2">
                 <QrCode className="h-5 w-5 text-emerald-500" />
-                <span className="text-2xl font-semibold">{activeLinks}</span>
+                <span className="font-mono text-2xl font-semibold">{activeLinks}</span>
               </div>
               <p className="mt-2 text-xs text-muted-foreground">
                 Live or reusable public links currently available to share.
@@ -578,7 +578,7 @@ export default function EventsPage() {
               </p>
               <div className="mt-3 flex items-center gap-2">
                 <CalendarDays className="h-5 w-5 text-sky-500" />
-                <span className="text-2xl font-semibold">{listingInquiryLinks}</span>
+                <span className="font-mono text-2xl font-semibold">{listingInquiryLinks}</span>
               </div>
               <p className="mt-2 text-xs text-muted-foreground">
                 Events already positioned for long-tail buyer and buyer-agent traffic.
@@ -592,7 +592,7 @@ export default function EventsPage() {
               </p>
               <div className="mt-3 flex items-center gap-2">
                 <Users className="h-5 w-5 text-teal-500" />
-                <span className="text-2xl font-semibold">{totalCaptures}</span>
+                <span className="font-mono text-2xl font-semibold">{totalCaptures}</span>
               </div>
               <p className="mt-2 text-xs text-muted-foreground">
                 Total sign-ins and listing inquiries currently stored across this workspace.
@@ -606,7 +606,7 @@ export default function EventsPage() {
               </p>
               <div className="mt-3 flex items-center gap-2">
                 <FileText className="h-5 w-5 text-orange-500" />
-                <span className="text-2xl font-semibold">{sellerReportsReady}</span>
+                <span className="font-mono text-2xl font-semibold">{sellerReportsReady}</span>
               </div>
               <p className="mt-2 text-xs text-muted-foreground">
                 Listings with captured demand already ready for a seller-facing recap.
@@ -665,24 +665,23 @@ export default function EventsPage() {
                 The strongest setups follow the same path every time: import the listing, publish one reusable share page, then turn the captured demand into a seller-ready story.
               </p>
             </div>
-            <div className="grid gap-3 md:grid-cols-3">
+            {/* Vertical stacked list — avoids banned 3-col equal layout */}
+            <div className="flex flex-col gap-3">
               {launchPlaybook.map((item, index) => (
                 <div
                   key={item.title}
-                  className="rounded-2xl border border-border/50 bg-background/80 p-4 shadow-sm"
+                  className="flex items-start gap-4 rounded-2xl border border-border/50 bg-background/80 p-4 shadow-sm"
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="inline-flex rounded-xl bg-emerald-500/10 p-2 text-emerald-700">
-                      <item.icon className="h-4 w-4" />
-                    </div>
-                    <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                      0{index + 1}
-                    </span>
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-700">
+                    <item.icon className="h-4 w-4" />
                   </div>
-                  <h3 className="mt-4 text-sm font-semibold">{item.title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                    {item.description}
-                  </p>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">0{index + 1}</span>
+                      <h3 className="text-sm font-semibold">{item.title}</h3>
+                    </div>
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{item.description}</p>
+                  </div>
                 </div>
               ))}
             </div>
@@ -729,16 +728,17 @@ export default function EventsPage() {
                 Create Open House
               </Button>
             </div>
-            <div className="grid gap-3 md:grid-cols-3">
+            {/* Stacked — avoids banned 3-col equal layout in empty state */}
+            <div className="flex flex-col gap-3">
               {launchPlaybook.map((item) => (
-                <div key={item.title} className="rounded-2xl border border-border/50 bg-background/80 p-4 text-left">
-                  <div className="inline-flex rounded-xl bg-emerald-500/10 p-2 text-emerald-700">
+                <div key={item.title} className="flex items-start gap-4 rounded-2xl border border-border/50 bg-background/80 p-4 text-left">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-700">
                     <item.icon className="h-4 w-4" />
                   </div>
-                  <h4 className="mt-4 text-sm font-semibold">{item.title}</h4>
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                    {item.description}
-                  </p>
+                  <div className="min-w-0">
+                    <h4 className="text-sm font-semibold">{item.title}</h4>
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{item.description}</p>
+                  </div>
                 </div>
               ))}
             </div>

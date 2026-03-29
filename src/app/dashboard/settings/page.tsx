@@ -19,6 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import { hasUnlimitedAiQueries } from "@/lib/plans";
 import { formatSignInMethodLabel } from "@/lib/follow-up-email";
 
@@ -430,7 +431,7 @@ export default function SettingsPage() {
   return (
     <div className="max-w-4xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
         <p className="mt-1 text-muted-foreground">
           Manage account access, delivery identities, and subscription settings.
         </p>
@@ -466,7 +467,17 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent className="space-y-3">
           {loading || !billingStatus ? (
-            <p className="text-sm text-muted-foreground">Checking deployment configuration...</p>
+            <div className="space-y-3">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="flex items-center justify-between gap-4">
+                  <div className="space-y-1.5">
+                    <Skeleton className="h-4 w-32 rounded" />
+                    <Skeleton className="h-3 w-56 rounded" />
+                  </div>
+                  <Skeleton className="h-6 w-20 rounded-full" />
+                </div>
+              ))}
+            </div>
           ) : (
             <>
               {[
@@ -550,9 +561,12 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           {loading || !billingStatus ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading delivery settings...
+            <div className="space-y-3">
+              <Skeleton className="h-10 w-full rounded-2xl" />
+              <div className="grid gap-4 lg:grid-cols-2">
+                <Skeleton className="h-32 w-full rounded-3xl" />
+                <Skeleton className="h-32 w-full rounded-3xl" />
+              </div>
             </div>
           ) : (
             <>

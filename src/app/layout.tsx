@@ -1,9 +1,29 @@
 import type { Metadata, Viewport } from "next";
+import { Fraunces, Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { Providers } from "@/components/providers";
 import { absoluteUrl, getSiteUrl, siteConfig } from "@/lib/site";
 import { brand } from "@/lib/brand";
+
+const geist = Geist({
+  subsets: ["latin"],
+  variable: "--font-geist",
+  display: "swap",
+});
+
+const geistMono = Geist_Mono({
+  subsets: ["latin"],
+  variable: "--font-geist-mono",
+  display: "swap",
+});
+
+const fraunces = Fraunces({
+  subsets: ["latin"],
+  variable: "--font-fraunces",
+  axes: ["SOFT", "opsz"],
+  display: "swap",
+});
 
 const siteUrl = getSiteUrl();
 
@@ -100,7 +120,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="scroll-smooth">
+    <html lang="en" className={`scroll-smooth ${geist.variable} ${geistMono.variable} ${fraunces.variable}`}>
       <body className="font-sans antialiased">
         <Providers>{children}</Providers>
         <Toaster />

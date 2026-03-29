@@ -334,21 +334,33 @@ export default function LandingPage({ isAuthenticated = false }: LandingPageProp
         {/* ═══════════════════════════════════════════════
             Hero
            ═══════════════════════════════════════════════ */}
-        <section className="mx-auto grid max-w-7xl gap-10 px-5 pb-20 pt-12 md:px-8 lg:grid-cols-[1.08fr_0.92fr] lg:items-center lg:gap-14 lg:pb-28 lg:pt-16">
+        <section className="mx-auto grid max-w-7xl gap-10 px-5 pb-20 pt-12 md:px-8 lg:grid-cols-[1.08fr_0.92fr] lg:items-center lg:gap-14 lg:pb-32 lg:pt-20">
           <div>
-            <Badge className="mb-6 rounded-full border-emerald-500/25 bg-emerald-500/8 px-3.5 py-1 text-emerald-700">
+            <Badge
+              className="mb-6 rounded-full border-emerald-500/25 bg-emerald-500/8 px-3.5 py-1 text-emerald-700 hero-enter"
+              style={{ animationDelay: "0ms" }}
+            >
               <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
               For North American real estate teams
             </Badge>
-            <h1 className="font-display max-w-3xl text-[2.75rem] font-semibold leading-[1.1] tracking-tight sm:text-5xl lg:text-[3.5rem]">
+            <h1
+              className="font-display max-w-3xl text-[2.75rem] font-semibold leading-[1.1] tracking-tight sm:text-5xl lg:text-[3.5rem] hero-enter"
+              style={{ animationDelay: "90ms" }}
+            >
               Import the listing once. Use one branded link for the open house, the buyer agent, and the seller report.
             </h1>
-            <p className="mt-6 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
+            <p
+              className="mt-6 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg hero-enter"
+              style={{ animationDelay: "190ms" }}
+            >
               OpenHouse starts with MLS, address, or flyer import, turns it into a polished share page,
               captures sign-ins and long-tail inquiries, then packages the demand story back into seller-ready reporting.
             </p>
 
-            <div className="mt-8 flex flex-wrap items-center gap-3">
+            <div
+              className="mt-8 flex flex-wrap items-center gap-3 hero-enter"
+              style={{ animationDelay: "280ms" }}
+            >
               {isAuthenticated ? (
                 <Button
                   size="lg"
@@ -376,7 +388,10 @@ export default function LandingPage({ isAuthenticated = false }: LandingPageProp
               </a>
             </div>
 
-            <div className="mt-10 grid gap-3 sm:grid-cols-3">
+            <div
+              className="mt-10 grid gap-3 sm:grid-cols-3 hero-enter"
+              style={{ animationDelay: "370ms" }}
+            >
               {HERO_STATS.map((stat) => (
                 <div
                   key={stat.label}
@@ -388,14 +403,20 @@ export default function LandingPage({ isAuthenticated = false }: LandingPageProp
               ))}
             </div>
 
-            <p className="mt-7 inline-flex items-center gap-2 rounded-full border border-border/40 bg-card/50 px-3.5 py-2 text-sm text-muted-foreground">
+            <p
+              className="mt-7 inline-flex items-center gap-2 rounded-full border border-border/40 bg-card/50 px-3.5 py-2 text-sm text-muted-foreground hero-enter"
+              style={{ animationDelay: "450ms" }}
+            >
               <ShieldCheck className="h-3.5 w-3.5 text-emerald-700" />
               Free stays generous, and the first 3 published launches include Pro so teams feel the full workflow before paying.
             </p>
           </div>
 
           {/* Hero preview card */}
-          <aside className="rounded-[28px] border border-border/50 bg-card/80 p-5 shadow-2xl shadow-emerald-900/[0.04] backdrop-blur-xl md:p-6">
+          <aside
+            className="rounded-[28px] border border-border/50 bg-card/80 p-5 shadow-2xl shadow-emerald-900/[0.04] backdrop-blur-xl md:p-6 hero-enter"
+            style={{ animationDelay: "150ms" }}
+          >
             <div className="flex items-center justify-between">
               <p className="text-xs font-medium uppercase tracking-[0.16em] text-emerald-700/90">
                 Listing launch snapshot
@@ -474,7 +495,7 @@ export default function LandingPage({ isAuthenticated = false }: LandingPageProp
            ═══════════════════════════════════════════════ */}
         <section
           id="product"
-          className="scroll-mt-24 mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24"
+          className="scroll-mt-24 mx-auto max-w-7xl px-5 py-24 md:px-8 md:py-28"
         >
           <div className="grid gap-6 lg:grid-cols-[1fr_0.85fr] lg:items-end">
             <div>
@@ -490,21 +511,43 @@ export default function LandingPage({ isAuthenticated = false }: LandingPageProp
             </p>
           </div>
 
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {PRODUCT_PILLARS.map((pillar) => (
-              <article
-                key={pillar.title}
-                className="group rounded-[24px] border border-border/50 bg-card/60 p-5 transition-all duration-200 hover:border-emerald-500/25 hover:bg-card/80 hover:shadow-lg hover:shadow-emerald-900/[0.03] md:p-6"
-              >
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500/10 font-display text-sm font-semibold text-emerald-700 transition-colors group-hover:bg-emerald-500/15">
-                  {pillar.id}
-                </div>
-                <h3 className="mt-4 text-base font-semibold leading-snug">{pillar.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                  {pillar.description}
-                </p>
-              </article>
-            ))}
+          <div className="mt-10 grid gap-4 lg:grid-cols-[1.6fr_1fr]">
+            {/* Featured wide pillar */}
+            <article className="group rounded-[28px] border border-border/50 bg-card/60 p-7 transition-all duration-200 hover:border-emerald-500/25 hover:bg-card/80 hover:shadow-xl hover:shadow-emerald-900/[0.04]">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/10 text-sm font-semibold text-emerald-700 transition-colors group-hover:bg-emerald-500/15">
+                {PRODUCT_PILLARS[0].id}
+              </div>
+              <h3 className="mt-5 text-xl font-semibold leading-snug">{PRODUCT_PILLARS[0].title}</h3>
+              <p className="mt-3 max-w-md text-sm leading-relaxed text-muted-foreground">
+                {PRODUCT_PILLARS[0].description}
+              </p>
+              <div className="mt-6 grid grid-cols-2 gap-3 text-xs">
+                {["MLS import", "Address lookup", "Flyer PDF", "Clean listing record"].map((tag) => (
+                  <div key={tag} className="flex items-center gap-1.5 text-muted-foreground">
+                    <span className="h-1 w-1 rounded-full bg-emerald-500" />
+                    {tag}
+                  </div>
+                ))}
+              </div>
+            </article>
+
+            {/* Stacked secondary pillars */}
+            <div className="flex flex-col gap-4">
+              {PRODUCT_PILLARS.slice(1).map((pillar) => (
+                <article
+                  key={pillar.title}
+                  className="group flex flex-1 flex-col rounded-[24px] border border-border/50 bg-card/60 p-5 transition-all duration-200 hover:border-emerald-500/25 hover:bg-card/80 hover:shadow-lg hover:shadow-emerald-900/[0.03]"
+                >
+                  <div className="mb-3 flex items-center gap-3">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500/10 text-xs font-semibold text-emerald-700">
+                      {pillar.id}
+                    </div>
+                    <h3 className="text-sm font-semibold leading-snug">{pillar.title}</h3>
+                  </div>
+                  <p className="text-xs leading-relaxed text-muted-foreground">{pillar.description}</p>
+                </article>
+              ))}
+            </div>
           </div>
         </section>
 
@@ -545,7 +588,7 @@ export default function LandingPage({ isAuthenticated = false }: LandingPageProp
           </div>
         </section>
 
-        <section className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24">
+        <section className="mx-auto max-w-7xl px-5 py-24 md:px-8 md:py-28">
           <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700/90">
@@ -713,7 +756,7 @@ export default function LandingPage({ isAuthenticated = false }: LandingPageProp
            ═══════════════════════════════════════════════ */}
         <section
           id="pricing"
-          className="scroll-mt-24 mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24"
+          className="scroll-mt-24 mx-auto max-w-7xl px-5 py-24 md:px-8 md:py-32"
         >
           <div className="max-w-3xl">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700/90">

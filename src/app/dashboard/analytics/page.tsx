@@ -6,13 +6,13 @@ import {
     CalendarDays,
     FileText,
     Flame,
-    Loader2,
     PieChart,
     QrCode,
     TrendingUp,
     Users,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface AnalyticsEvent {
     id: number;
@@ -164,8 +164,34 @@ export default function AnalyticsPage() {
             </Card>
 
             {loading ? (
-                <div className="flex items-center justify-center py-16">
-                    <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
+                <div className="space-y-4">
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                        {[...Array(4)].map((_, i) => (
+                            <Card key={i} className="border-border/55 bg-card/62">
+                                <CardHeader className="pb-2">
+                                    <Skeleton className="h-3.5 w-28 rounded" />
+                                </CardHeader>
+                                <CardContent>
+                                    <Skeleton className="h-8 w-16 rounded-lg" />
+                                    <Skeleton className="mt-2 h-3 w-32 rounded" />
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </div>
+                    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(22rem,0.92fr)]">
+                        {[0, 1].map((i) => (
+                            <Card key={i} className="border-border/55 bg-card/62">
+                                <CardHeader className="pb-2">
+                                    <Skeleton className="h-5 w-32 rounded" />
+                                </CardHeader>
+                                <CardContent className="grid gap-3 sm:grid-cols-2">
+                                    {[...Array(4)].map((_, j) => (
+                                        <Skeleton key={j} className="h-16 w-full rounded-[1.2rem]" />
+                                    ))}
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </div>
                 </div>
             ) : (
                 <>
@@ -181,7 +207,7 @@ export default function AnalyticsPage() {
                                     </div>
                                 </CardHeader>
                                 <CardContent>
-                                    <p className="text-3xl font-semibold tracking-tight text-foreground">
+                                    <p className="font-mono text-3xl font-semibold tracking-tight text-foreground">
                                         {metric.value}
                                     </p>
                                     <p className="mt-1 text-xs text-muted-foreground">{metric.note}</p>
@@ -210,7 +236,7 @@ export default function AnalyticsPage() {
                                         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                                             {item.label}
                                         </p>
-                                        <p className="mt-2 text-3xl font-semibold tracking-tight text-foreground">
+                                        <p className="mt-2 font-mono text-3xl font-semibold tracking-tight text-foreground">
                                             {item.value}
                                         </p>
                                     </div>

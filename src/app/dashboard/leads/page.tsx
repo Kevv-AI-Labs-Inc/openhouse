@@ -377,48 +377,52 @@ export default function LeadsPage() {
         <div className="space-y-6">
             {/* Header */}
             <div>
-                <h1 className="text-2xl font-bold tracking-tight">Leads</h1>
-                <p className="text-muted-foreground mt-1">All visitors across your Open Houses</p>
+                <h1 className="text-2xl font-semibold tracking-tight">Leads</h1>
+                <p className="mt-1 text-muted-foreground">All visitors across your Open Houses</p>
             </div>
 
-            {/* Stats Strip */}
-            <div className="grid grid-cols-4 gap-4">
-                <Card>
-                    <CardContent className="p-4 flex items-center gap-3">
-                        <Users className="h-5 w-5 text-emerald-400" />
+            {/* Stats Strip — asymmetric 2-col: total count gets prominence, tiers stack right */}
+            <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+                <Card className="border-border/55 bg-card/60">
+                    <CardContent className="flex items-center gap-4 p-5">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-700">
+                            <Users className="h-5 w-5" />
+                        </div>
                         <div>
-                            <div className="text-2xl font-bold">{allLeads.length}</div>
-                            <div className="text-xs text-muted-foreground">Total Leads</div>
+                            <div className="font-mono text-3xl font-semibold tracking-tight">{allLeads.length}</div>
+                            <div className="mt-0.5 text-xs text-muted-foreground">Total leads captured</div>
                         </div>
                     </CardContent>
                 </Card>
-                <Card>
-                    <CardContent className="p-4 flex items-center gap-3">
-                        <Flame className="h-5 w-5 text-orange-400" />
-                        <div>
-                            <div className="text-2xl font-bold">{hotCount}</div>
-                            <div className="text-xs text-muted-foreground">Hot</div>
-                        </div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardContent className="p-4 flex items-center gap-3">
-                        <Zap className="h-5 w-5 text-yellow-400" />
-                        <div>
-                            <div className="text-2xl font-bold">{warmCount}</div>
-                            <div className="text-xs text-muted-foreground">Warm</div>
-                        </div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardContent className="p-4 flex items-center gap-3">
-                        <Eye className="h-5 w-5 text-gray-400" />
-                        <div>
-                            <div className="text-2xl font-bold">{coldCount}</div>
-                            <div className="text-xs text-muted-foreground">Cold</div>
-                        </div>
-                    </CardContent>
-                </Card>
+                <div className="grid grid-cols-3 gap-3">
+                    <Card className="border-border/55 bg-card/60">
+                        <CardContent className="p-4">
+                            <div className="mb-1 flex h-7 w-7 items-center justify-center rounded-xl bg-orange-500/10 text-orange-600">
+                                <Flame className="h-3.5 w-3.5" />
+                            </div>
+                            <div className="font-mono text-2xl font-semibold">{hotCount}</div>
+                            <div className="mt-0.5 text-xs text-muted-foreground">Hot</div>
+                        </CardContent>
+                    </Card>
+                    <Card className="border-border/55 bg-card/60">
+                        <CardContent className="p-4">
+                            <div className="mb-1 flex h-7 w-7 items-center justify-center rounded-xl bg-yellow-500/10 text-yellow-600">
+                                <Zap className="h-3.5 w-3.5" />
+                            </div>
+                            <div className="font-mono text-2xl font-semibold">{warmCount}</div>
+                            <div className="mt-0.5 text-xs text-muted-foreground">Warm</div>
+                        </CardContent>
+                    </Card>
+                    <Card className="border-border/55 bg-card/60">
+                        <CardContent className="p-4">
+                            <div className="mb-1 flex h-7 w-7 items-center justify-center rounded-xl bg-muted/60">
+                                <Eye className="h-3.5 w-3.5 text-muted-foreground" />
+                            </div>
+                            <div className="font-mono text-2xl font-semibold">{coldCount}</div>
+                            <div className="mt-0.5 text-xs text-muted-foreground">Cold</div>
+                        </CardContent>
+                    </Card>
+                </div>
             </div>
 
             {/* Filters */}

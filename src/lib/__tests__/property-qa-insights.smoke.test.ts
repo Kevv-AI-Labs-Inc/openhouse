@@ -41,19 +41,28 @@ describe("property qa insights smoke", () => {
     );
   });
 
-  it("detects a thin listing and falls back to broad suggested questions", () => {
+  it("marks a thin but basically identified listing as review instead of blocked", () => {
     const insights = getPropertyQaInsights({
       propertyAddress: "123 Main St",
       aiQaContext: null,
     });
 
     expect(insights.level).toBe("thin");
-    expect(insights.publishReadiness.status).toBe("blocked");
+    expect(insights.publishReadiness.status).toBe("review");
     expect(insights.suggestedQuestions.length).toBeGreaterThanOrEqual(3);
     expect(insights.missingLabels).toContain("Taxes and carry");
     expect(insights.publishReadiness.recommendedActions).toContain(
       "Add at least a few custom FAQ answers or agent notes before relying on the public chat."
     );
+  });
+
+  it("blocks when even the core listing facts are missing", () => {
+    const insights = getPropertyQaInsights({
+      aiQaContext: null,
+    });
+
+    expect(insights.publishReadiness.status).toBe("blocked");
+    expect(insights.publishReadiness.summary).toContain("missing too many core facts");
   });
 
   it("builds recovery prompts away from the missing topic when possible", () => {

@@ -272,11 +272,18 @@ function shouldUseWebSearch(question: string, context: PropertyContext) {
     question
   );
   const wantsBuilding =
-    /(parking|laundry|pet|doorman|elevator|amenit|gym|pool|停车|洗衣|宠物)/i.test(question);
+    /(parking|laundry|pet|doorman|elevator|amenit|gym|pool|storage|parking spot|车位|停车|洗衣|宠物)/i.test(question);
   const wantsFinancial =
-    /(tax|taxes|property tax|maintenance|common charge|hoa|地税|物业费|管理费)/i.test(question);
+    /(tax|taxes|property tax|maintenance|common charge|hoa|carrying cost|monthly cost|地税|物业费|管理费)/i.test(question);
+  const wantsPolicies =
+    /(sublet|sublease|pied-a-terre|pied a terre|financing|occupancy|rule|policy|board approval|出租|转租|政策|规定|贷款)/i.test(question);
   const wantsPublicContext =
-    wantsSchools || wantsNeighborhood || wantsTransit || wantsBuilding || wantsFinancial;
+    wantsSchools ||
+    wantsNeighborhood ||
+    wantsTransit ||
+    wantsBuilding ||
+    wantsFinancial ||
+    wantsPolicies;
 
   if (!wantsPublicContext) {
     return false;
@@ -308,10 +315,16 @@ function shouldUseWebSearch(question: string, context: PropertyContext) {
   // than listing metadata and visitors expect concrete public-context answers.
   const shouldAugmentSchools = wantsSchools;
   const shouldAugmentNeighborhood = wantsNeighborhood || wantsTransit;
+  const shouldAugmentBuilding = wantsBuilding;
+  const shouldAugmentFinancial = wantsFinancial;
+  const shouldAugmentPolicies = wantsPolicies;
 
   return (
     shouldAugmentSchools ||
     shouldAugmentNeighborhood ||
+    shouldAugmentBuilding ||
+    shouldAugmentFinancial ||
+    shouldAugmentPolicies ||
     needsFinancial ||
     needsBuilding ||
     needsNeighborhood
@@ -332,6 +345,14 @@ function buildWebSearchPlan(context: PropertyContext, userMessage: string) {
       return `${context.propertyAddress} property tax maintenance HOA common charges`;
     }
 
+    if (/(parking|laundry|pet|doorman|elevator|amenit|gym|pool|storage|车位|停车|洗衣|宠物)/i.test(userMessage)) {
+      return `${context.propertyAddress} building amenities parking laundry pet policy`;
+    }
+
+    if (/(sublet|sublease|pied-a-terre|pied a terre|financing|occupancy|rule|policy|board approval|出租|转租|政策|规定|贷款)/i.test(userMessage)) {
+      return `${context.propertyAddress} building rules sublet financing occupancy policy`;
+    }
+
     if (/(neighborhood|area|restaurant|grocery|附近|周边|社区)/i.test(userMessage)) {
       return `${context.propertyAddress} neighborhood nearby restaurants grocery transit`;
     }
@@ -340,30 +361,22 @@ function buildWebSearchPlan(context: PropertyContext, userMessage: string) {
   })();
   const includeDomains = (() => {
     if (/(school|district|学区|学校)/i.test(userMessage)) {
-      return parseDomainList(process.env.PROPERTY_QA_SCHOOL_SEARCH_DOMAINS).length > 0
-        ? parseDomainList(process.env.PROPERTY_QA_SCHOOL_SEARCH_DOMAINS)
-        : parseDomainList(process.env.PROPERTY_QA_WEB_SEARCH_INCLUDE_DOMAINS);
+      return parseDomainList(process.env.PROPERTY_QA_SCHOOL_SEARCH_DOMAINS);
     }
 
     if (/(train|subway|transit|commute|地铁|通勤)/i.test(userMessage)) {
-      return parseDomainList(process.env.PROPERTY_QA_TRANSIT_SEARCH_DOMAINS).length > 0
-        ? parseDomainList(process.env.PROPERTY_QA_TRANSIT_SEARCH_DOMAINS)
-        : parseDomainList(process.env.PROPERTY_QA_WEB_SEARCH_INCLUDE_DOMAINS);
+      return parseDomainList(process.env.PROPERTY_QA_TRANSIT_SEARCH_DOMAINS);
     }
 
-    if (/(tax|taxes|property tax|maintenance|common charge|hoa|地税|物业费|管理费)/i.test(userMessage)) {
-      return parseDomainList(process.env.PROPERTY_QA_TAX_SEARCH_DOMAINS).length > 0
-        ? parseDomainList(process.env.PROPERTY_QA_TAX_SEARCH_DOMAINS)
-        : parseDomainList(process.env.PROPERTY_QA_WEB_SEARCH_INCLUDE_DOMAINS);
+    if (/(tax|taxes|property tax|maintenance|common charge|hoa|carrying cost|monthly cost|地税|物业费|管理费)/i.test(userMessage)) {
+      return parseDomainList(process.env.PROPERTY_QA_TAX_SEARCH_DOMAINS);
     }
 
     if (/(neighborhood|area|restaurant|grocery|附近|周边|社区)/i.test(userMessage)) {
-      return parseDomainList(process.env.PROPERTY_QA_NEIGHBORHOOD_SEARCH_DOMAINS).length > 0
-        ? parseDomainList(process.env.PROPERTY_QA_NEIGHBORHOOD_SEARCH_DOMAINS)
-        : parseDomainList(process.env.PROPERTY_QA_WEB_SEARCH_INCLUDE_DOMAINS);
+      return parseDomainList(process.env.PROPERTY_QA_NEIGHBORHOOD_SEARCH_DOMAINS);
     }
 
-    return parseDomainList(process.env.PROPERTY_QA_WEB_SEARCH_INCLUDE_DOMAINS);
+    return [];
   })();
 
   return {
@@ -744,9 +757,7 @@ function shouldRetryWithBroaderSearch(
 function buildRecoveryWebSearchPlan(context: PropertyContext, userMessage: string) {
   const basePlan = buildWebSearchPlan(context, userMessage);
   const broadenedQuery = `${context.propertyAddress} ${userMessage}`.trim();
-  const includeDomains = basePlan.includeDomains.length > 0
-    ? basePlan.includeDomains
-    : parseDomainList(process.env.PROPERTY_QA_WEB_SEARCH_INCLUDE_DOMAINS);
+  const includeDomains = basePlan.includeDomains;
 
   return {
     query: broadenedQuery,

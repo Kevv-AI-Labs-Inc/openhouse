@@ -260,10 +260,11 @@ export default function EventDetailPage({
 
       toast.success("Event updated");
       if (Array.isArray(data.warnings) && data.warnings.length > 0) {
-        toast.warning(data.warnings[0], {
+        toast("AI Q&A can answer more confidently with a few extra facts", {
           description:
             data.qaCoverage?.publishReadiness?.summary ||
-            "Public AI chat still needs a little more coverage before you publish it.",
+            data.warnings[0] ||
+            "Public AI chat can launch now, and a few more details will improve answer quality.",
         });
       }
       setEditing(false);
@@ -514,6 +515,9 @@ export default function EventDetailPage({
               </div>
               {qaInsights.publishReadiness.warnings.length > 0 ? (
                 <div className="mt-4 space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    Suggestions to improve answer rate
+                  </p>
                   {qaInsights.publishReadiness.warnings.map((warning) => (
                     <p key={warning} className="text-xs text-muted-foreground">
                       {warning}

@@ -863,7 +863,9 @@ function buildFaq(listing: ImportedListing) {
   const financial = listing.propertyFacts?.financial;
   const schools = listing.propertyFacts?.schools;
   const building = listing.propertyFacts?.building;
+  const interior = listing.propertyFacts?.interior;
   const policies = listing.propertyFacts?.policies;
+  const neighborhood = listing.propertyFacts?.neighborhood;
 
   if (listing.listPrice) {
     faqs.push({
@@ -887,7 +889,9 @@ function buildFaq(listing: ImportedListing) {
 
   if (listing.neighborhood || listing.schoolDistrict) {
     const pieces = [
-      listing.neighborhood ? `Neighborhood: ${listing.neighborhood}` : null,
+      (neighborhood?.name || listing.neighborhood)
+        ? `Neighborhood: ${neighborhood?.name || listing.neighborhood}`
+        : null,
       (schools?.district || listing.schoolDistrict)
         ? `School district: ${schools?.district || listing.schoolDistrict}`
         : null,
@@ -930,7 +934,14 @@ function buildFaq(listing: ImportedListing) {
     building?.parking?.length ||
     building?.laundry?.length ||
     building?.petPolicy ||
-    building?.amenities?.length
+    building?.amenities?.length ||
+    building?.outdoorSpace?.length ||
+    building?.utilitiesIncluded?.length ||
+    building?.doorman !== undefined ||
+    building?.elevator !== undefined ||
+    building?.gym !== undefined ||
+    building?.pool !== undefined ||
+    building?.storage !== undefined
   ) {
     const pieces = [
       building.parking?.length ? `Parking: ${building.parking.join(", ")}` : null,
@@ -939,10 +950,34 @@ function buildFaq(listing: ImportedListing) {
       building.amenities?.length
         ? `Amenities include ${building.amenities.slice(0, 4).join(", ")}`
         : null,
+      building.outdoorSpace?.length
+        ? `Outdoor space: ${building.outdoorSpace.slice(0, 3).join(", ")}`
+        : null,
+      building.utilitiesIncluded?.length
+        ? `Included utilities/services: ${building.utilitiesIncluded.slice(0, 3).join(", ")}`
+        : null,
+      building.doorman ? "Doorman service is available" : null,
+      building.elevator ? "Elevator access is available" : null,
+      building.gym ? "A gym is available in the building" : null,
+      building.pool ? "A pool is available in the building" : null,
+      building.storage ? "Storage is available" : null,
     ].filter(Boolean);
 
     faqs.push({
       question: "What building amenities or policies are available?",
+      answer: pieces.join(". "),
+    });
+  }
+
+  if (interior?.appliances?.length || interior?.heating?.length || interior?.cooling?.length) {
+    const pieces = [
+      interior.appliances?.length ? `Appliances: ${interior.appliances.slice(0, 5).join(", ")}` : null,
+      interior.heating?.length ? `Heating: ${interior.heating.slice(0, 3).join(", ")}` : null,
+      interior.cooling?.length ? `Cooling: ${interior.cooling.slice(0, 3).join(", ")}` : null,
+    ].filter(Boolean);
+
+    faqs.push({
+      question: "What interior systems or appliances are included?",
       answer: pieces.join(". "),
     });
   }
@@ -973,7 +1008,30 @@ function buildFaq(listing: ImportedListing) {
     });
   }
 
-  return faqs.slice(0, 6);
+  if (listing.virtualTourUrl) {
+    faqs.push({
+      question: "Is there a virtual tour available?",
+      answer: `Yes. A virtual tour link is included for this listing: ${listing.virtualTourUrl}`,
+    });
+  }
+
+  if (neighborhood?.nearbyTransit?.length || neighborhood?.nearbyHighlights?.length) {
+    const pieces = [
+      neighborhood.nearbyTransit?.length
+        ? `Nearby transit: ${neighborhood.nearbyTransit.slice(0, 4).join(", ")}`
+        : null,
+      neighborhood.nearbyHighlights?.length
+        ? `Nearby highlights: ${neighborhood.nearbyHighlights.slice(0, 4).join(", ")}`
+        : null,
+    ].filter(Boolean);
+
+    faqs.push({
+      question: "What should buyers know about the neighborhood or transit nearby?",
+      answer: pieces.join(". "),
+    });
+  }
+
+  return faqs.slice(0, 10);
 }
 
 function buildNearbyPoiContext(listing: ImportedListing) {
@@ -1560,7 +1618,8 @@ Rules:
 - If a field is missing, return null.
 - property_type should be a human-readable phrase like "single family", "condo", "townhouse", "multi family", or "land".
 - features should be a short array of notable highlights.
-- faq should contain up to 4 concise Q&A pairs that a visitor would ask at an open house.
+- faq should contain up to 6 concise Q&A pairs that a visitor would ask at an open house.
+- Prefer concrete facts about costs, building amenities, policies, schools, transit, or layout over generic sales copy.
 - nearby_poi should only include concrete information found in the document text.
 
 Document text:
@@ -1593,7 +1652,8 @@ Rules:
 - If a field is missing, return null.
 - property_type should be a human-readable phrase like "single family", "condo", "townhouse", "multi family", or "land".
 - features should be a short array of notable highlights.
-- faq should contain up to 4 concise Q&A pairs that a visitor would ask at an open house.
+- faq should contain up to 6 concise Q&A pairs that a visitor would ask at an open house.
+- Prefer concrete facts about costs, building amenities, policies, schools, transit, or layout over generic sales copy.
 - nearby_poi should only include concrete information visible in the flyer.`;
 
   const result = await chatCompletion({
@@ -1660,7 +1720,7 @@ export async function importListingFromFlyer(
   );
 
   const draft = mapListingToEventDraft(listing);
-  const faq = extracted.faq?.slice(0, 4);
+  const faq = extracted.faq?.slice(0, 6);
   const nearbyPoi = extracted.nearby_poi;
 
   return withMarketingCopy({

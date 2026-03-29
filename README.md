@@ -6,6 +6,12 @@ This repository is the official open-source OpenHouse codebase maintained by Kev
 
 The official hosted product, support, and brand experience remain operated by Kevv at [openhouse.kevv.ai](https://openhouse.kevv.ai) and [kevv.ai](https://kevv.ai).
 
+## Deploying and Operating
+
+- Self-hosting guide: [docs/SELF_HOSTING.md](./docs/SELF_HOSTING.md)
+- Environment, migrations, runtime schema checks, and Kevv sync worker: [docs/OPERATIONS.md](./docs/OPERATIONS.md)
+- Railway or other hosted deploys should configure an internal ops token before relying on runtime schema checks or sync workers.
+
 ## Open Source Status
 
 - Source code is licensed under Apache 2.0. See [LICENSE](./LICENSE).
@@ -52,6 +58,13 @@ npx drizzle-kit push --config=drizzle.config.ts
 npm run dev
 ```
 
+Optional runtime checks:
+
+```bash
+npm run db:check
+npm run kevv:sync -- --limit=25
+```
+
 ## Required Environment Variables
 
 ### Base App
@@ -64,6 +77,7 @@ NEXT_PUBLIC_APP_URL=https://app.example.com
 NEXT_PUBLIC_SITE_URL=https://app.example.com
 AUTH_TRUST_HOST=true
 PUBLIC_CHAT_COOKIE_SECRET=...
+INTERNAL_OPS_TOKEN=...
 # Optional. If omitted, OpenHouse falls back to a shared database-backed limiter.
 UPSTASH_REDIS_REST_URL=...
 UPSTASH_REDIS_REST_TOKEN=...
@@ -191,6 +205,25 @@ LISTING_DATA_ADDRESS_SEARCH_PATH=/custom/search
 ```
 
 The adapter sends both `X-API-Key` and `Authorization: Bearer ...` headers for compatibility with existing internal services.
+
+### Kevv Sync Worker
+
+If you want OpenHouse sign-ins to flow back into a Kevv-side system, configure:
+
+```bash
+INTERNAL_OPS_TOKEN=...
+KEVV_SYNC_BASE_URL=https://app.example.com
+KEVV_SYNC_TOKEN=...
+KEVV_SYNC_PATH=/api/internal/openhouse/signins
+KEVV_SYNC_TIMEOUT_MS=8000
+```
+
+Then either:
+
+- trigger `POST /api/internal/kevv-sync/run` from your job runner or Railway cron, or
+- run `npm run kevv:sync -- --limit=25` from a worker process
+
+The worker reads pending sign-ins from OpenHouse, posts them to the Kevv endpoint, and writes back `crmSyncStatus` / `kevvContactId`.
 
 ### Email Relay
 

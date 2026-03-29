@@ -1,10 +1,11 @@
 import type { User } from "@/lib/db/schema";
-import { isPro } from "@/lib/plans";
+import { resolvePlanTier } from "@/lib/account-access";
 
 export type FollowUpEmailMode = "draft" | "google" | "microsoft" | "custom_domain";
 
 type FollowUpUser = Pick<
   User,
+  | "email"
   | "subscriptionTier"
   | "followUpEmailMode"
   | "gmailRefreshTokenEncrypted"
@@ -41,6 +42,7 @@ export function isMicrosoftMailboxConnected(user: Pick<
 export function isCustomDomainRelayReady(
   user: Pick<
     User,
+    | "email"
     | "subscriptionTier"
     | "customSendingDomain"
     | "customSendingDomainStatus"
@@ -50,7 +52,10 @@ export function isCustomDomainRelayReady(
 ) {
   return Boolean(
     relayConfigured &&
-      isPro(user.subscriptionTier) &&
+      resolvePlanTier({
+        subscriptionTier: user.subscriptionTier,
+        email: user.email,
+      }) === "pro" &&
       user.customSendingDomain &&
       user.customSendingFromEmail &&
       user.customSendingDomainStatus === "verified"

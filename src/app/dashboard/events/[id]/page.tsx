@@ -6,7 +6,6 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import {
   ArrowLeft,
-  CalendarDays,
   Copy,
   Download,
   ExternalLink,
@@ -15,6 +14,7 @@ import {
   Printer,
   QrCode,
   Save,
+  Sparkles,
   Users,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -44,6 +44,7 @@ import {
 } from "@/lib/listing-import-shared";
 import Image from "next/image";
 import { formatPublicModeLabel, inferCaptureMode } from "@/lib/public-mode";
+import { getPropertyQaInsights } from "@/lib/property-qa-insights";
 
 interface SignIn {
   id: number;
@@ -154,6 +155,15 @@ function buildFormFromEvent(event: EventDetail): EventFormState {
   };
 }
 
+function parseOptionalNumber(value: string, fallback: number | null) {
+  if (value === "") {
+    return fallback;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 export default function EventDetailPage({
   params,
 }: {
@@ -242,13 +252,21 @@ export default function EventDetailPage({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(buildEventPayload(form)),
       });
+      const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        const data = await res.json();
         throw new Error(data.error || "Failed to save event");
       }
 
       toast.success("Event updated");
+      if (Array.isArray(data.warnings) && data.warnings.length > 0) {
+        toast("AI Q&A can answer more confidently with a few extra facts", {
+          description:
+            data.qaCoverage?.publishReadiness?.summary ||
+            data.warnings[0] ||
+            "Public AI chat can launch now, and a few more details will improve answer quality.",
+        });
+      }
       setEditing(false);
       fetchEvent();
     } catch (error) {
@@ -331,6 +349,28 @@ export default function EventDetailPage({
   const importedSource = form.importSummary?.source || "manual";
   const importedPhotoCount = form.propertyPhotos.length;
   const importedFaqCount = form.aiQaContext?.customFaq?.length ?? 0;
+  const qaInsights = getPropertyQaInsights({
+    propertyAddress: form.propertyAddress || event.propertyAddress,
+    listPrice: form.listPrice || event.listPrice,
+    propertyDescription: form.propertyDescription || event.propertyDescription,
+    bedrooms: parseOptionalNumber(form.bedrooms, event.bedrooms),
+    bathrooms: form.bathrooms || event.bathrooms,
+    sqft: parseOptionalNumber(form.sqft, event.sqft),
+    yearBuilt: parseOptionalNumber(form.yearBuilt, event.yearBuilt),
+    aiQaContext: form.aiQaContext,
+  });
+  const qaCoverageBadgeClass =
+    qaInsights.level === "strong"
+      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700"
+      : qaInsights.level === "partial"
+        ? "border-amber-500/30 bg-amber-500/10 text-amber-700"
+        : "border-slate-500/30 bg-slate-500/10 text-slate-700";
+  const qaPublishBadgeClass =
+    qaInsights.publishReadiness.status === "ready"
+      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700"
+      : qaInsights.publishReadiness.status === "review"
+        ? "border-amber-500/30 bg-amber-500/10 text-amber-700"
+        : "border-red-500/30 bg-red-500/10 text-red-700";
 
   return (
     <div className="max-w-5xl space-y-6">
@@ -397,15 +437,153 @@ export default function EventDetailPage({
         <Card>
           <CardContent className="flex items-center gap-3 p-4">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/10">
-              <CalendarDays className="h-5 w-5 text-blue-400" />
+              <Sparkles className="h-5 w-5 text-blue-400" />
             </div>
             <div>
-              <div className="text-2xl font-bold">{importedFaqCount}</div>
-              <div className="text-xs text-muted-foreground">AI FAQ pairs ready</div>
+              <div className="text-2xl font-bold">{qaInsights.score}%</div>
+              <div className="text-xs text-muted-foreground">AI Q&A coverage</div>
             </div>
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader className="flex flex-row items-start justify-between gap-4">
+          <div>
+            <CardTitle className="text-base">AI Q&A Coverage</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Internal QA readiness for the public property chat. This is not shown to visitors.
+            </p>
+          </div>
+          <Badge className={qaCoverageBadgeClass}>
+            {qaInsights.level === "strong"
+              ? "Strong coverage"
+              : qaInsights.level === "partial"
+                ? "Partial coverage"
+                : "Thin coverage"}
+          </Badge>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="grid gap-4 md:grid-cols-[0.9fr_1.1fr]">
+            <div className="rounded-3xl border border-border/60 bg-background/70 p-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Coverage summary
+              </p>
+              <div className="mt-3 flex items-end gap-3">
+                <span className="text-4xl font-semibold">{qaInsights.score}%</span>
+                <span className="pb-1 text-sm text-muted-foreground">
+                  {qaInsights.readyCount} of {qaInsights.totalCount} areas ready
+                </span>
+              </div>
+              <p className="mt-3 text-sm text-muted-foreground">
+                {importedFaqCount} prepared FAQ pair{importedFaqCount === 1 ? "" : "s"} and{" "}
+                {importedPhotoCount} imported photo{importedPhotoCount === 1 ? "" : "s"} currently attached.
+              </p>
+              {qaInsights.missingLabels.length > 0 ? (
+                <div className="mt-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    Still thin
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {qaInsights.missingLabels.map((label) => (
+                      <Badge
+                        key={label}
+                        variant="outline"
+                        className="border-amber-500/25 bg-amber-500/5 text-amber-700"
+                      >
+                        {label}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="rounded-3xl border border-border/60 bg-background/70 p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    Publish-time check
+                  </p>
+                  <p className="mt-2 text-sm text-foreground/90">
+                    {qaInsights.publishReadiness.summary}
+                  </p>
+                </div>
+                <Badge className={qaPublishBadgeClass}>
+                  {qaInsights.publishReadiness.label}
+                </Badge>
+              </div>
+              {qaInsights.publishReadiness.warnings.length > 0 ? (
+                <div className="mt-4 space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    Suggestions to improve answer rate
+                  </p>
+                  {qaInsights.publishReadiness.warnings.map((warning) => (
+                    <p key={warning} className="text-xs text-muted-foreground">
+                      {warning}
+                    </p>
+                  ))}
+                </div>
+              ) : null}
+              <div className="mt-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Next best actions
+                </p>
+                <div className="mt-2 space-y-2">
+                  {qaInsights.publishReadiness.recommendedActions.map((action) => (
+                    <p key={action} className="text-xs text-muted-foreground">
+                      {action}
+                    </p>
+                  ))}
+                </div>
+              </div>
+              <div className="mt-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Suggested starter questions
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {qaInsights.suggestedQuestions.map((question) => (
+                    <span
+                      key={question}
+                      className="rounded-full border border-border/60 bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground"
+                    >
+                      {question}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            {qaInsights.categories.map((category) => (
+              <div
+                key={category.key}
+                className={`rounded-2xl border px-4 py-3 ${
+                  category.ready
+                    ? "border-emerald-500/20 bg-emerald-500/[0.05]"
+                    : "border-border/60 bg-background/60"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-medium">{category.label}</p>
+                  <Badge
+                    variant="outline"
+                    className={
+                      category.ready
+                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700"
+                        : "border-border/70 bg-background text-muted-foreground"
+                    }
+                  >
+                    {category.ready ? "Ready" : "Missing"}
+                  </Badge>
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">{category.summary}</p>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-4">

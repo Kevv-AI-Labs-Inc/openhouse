@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
   const [user] = await db
     .select({
       id: users.id,
+      email: users.email,
       subscriptionTier: users.subscriptionTier,
       gmailRefreshTokenEncrypted: users.gmailRefreshTokenEncrypted,
       gmailSendAsEmail: users.gmailSendAsEmail,

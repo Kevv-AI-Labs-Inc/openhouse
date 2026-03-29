@@ -64,13 +64,6 @@ function getInitials(name?: string | null) {
     return tokens.map((token) => token[0]?.toUpperCase() ?? "").join("") || "AG";
 }
 
-function getPageLabel(pathname: string) {
-    const match = NAV_ITEMS.find(
-        (item) => pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`))
-    );
-    return match?.label ?? "Dashboard";
-}
-
 function UserMenu({ user, compact = false }: { user?: UserInfo; compact?: boolean }) {
     return (
         <DropdownMenu>
@@ -156,7 +149,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
     const isPro = session?.user?.subscriptionTier === "pro";
-    const pageLabel = getPageLabel(pathname);
 
     const handleNewEventClick = () => {
         requestNewEventDialog();
@@ -299,17 +291,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                     </SheetContent>
                                 </Sheet>
 
-                                <div>
-                                    <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
-                                        OpenHouse control center
-                                    </p>
-                                    <p
-                                        className="text-xl font-semibold tracking-tight"
-                                        style={{ fontFamily: '"Canela", "Fraunces", "Times New Roman", serif' }}
-                                    >
-                                        {pageLabel}
-                                    </p>
-                                </div>
                             </div>
 
                             <div className="flex items-center gap-2">

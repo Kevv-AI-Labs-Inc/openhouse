@@ -4,6 +4,14 @@ const EVENT_CACHE_PREFIX = "oh-kiosk-event";
 const QUEUE_PREFIX = "oh-kiosk-queue";
 const LAST_SYNC_PREFIX = "oh-kiosk-last-sync";
 
+const KIOSK_DB_NAME = "openhouse-kiosk";
+const KIOSK_STORE_NAME = "offline";
+
+type StoredRecord = {
+  key: string;
+  value: unknown;
+};
+
 export type QueuedKioskSignIn = {
   clientSubmissionId: string;
   payload: PublicSignInPayload & { clientSubmissionId: string };
@@ -12,6 +20,20 @@ export type QueuedKioskSignIn = {
   status: "pending" | "failed";
   lastError: string | null;
 };
+
+let openDbPromise: Promise<IDBDatabase | null> | null = null;
+
+function getIndexedDb() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    return window.indexedDB ?? null;
+  } catch {
+    return null;
+  }
+}
 
 function getStorage() {
   if (typeof window === "undefined") {
@@ -37,27 +59,81 @@ function getLastSyncKey(uuid: string) {
   return `${LAST_SYNC_PREFIX}:${uuid}`;
 }
 
-function readJson<T>(key: string, fallback: T): T {
+async function openDb() {
+  if (openDbPromise) {
+    return openDbPromise;
+  }
+
+  const indexedDb = getIndexedDb();
+
+  if (!indexedDb) {
+    return null;
+  }
+
+  openDbPromise = new Promise<IDBDatabase | null>((resolve) => {
+    try {
+      const request = indexedDb.open(KIOSK_DB_NAME, 1);
+
+      request.onupgradeneeded = () => {
+        const db = request.result;
+
+        if (!db.objectStoreNames.contains(KIOSK_STORE_NAME)) {
+          db.createObjectStore(KIOSK_STORE_NAME, { keyPath: "key" });
+        }
+      };
+
+      request.onsuccess = () => {
+        const db = request.result;
+
+        db.onclose = () => {
+          openDbPromise = null;
+        };
+
+        resolve(db);
+      };
+
+      request.onerror = () => {
+        openDbPromise = null;
+        resolve(null);
+      };
+
+      request.onblocked = () => {
+        openDbPromise = null;
+        resolve(null);
+      };
+    } catch {
+      openDbPromise = null;
+      resolve(null);
+    }
+  });
+
+  return openDbPromise;
+}
+
+function readLocalJson<T>(key: string, fallback: T) {
   const storage = getStorage();
 
   if (!storage) {
-    return fallback;
+    return { found: false, value: fallback };
   }
 
   try {
     const raw = storage.getItem(key);
 
     if (!raw) {
-      return fallback;
+      return { found: false, value: fallback };
     }
 
-    return JSON.parse(raw) as T;
+    return {
+      found: true,
+      value: JSON.parse(raw) as T,
+    };
   } catch {
-    return fallback;
+    return { found: false, value: fallback };
   }
 }
 
-function writeJson(key: string, value: unknown) {
+function writeLocalJson(key: string, value: unknown) {
   const storage = getStorage();
 
   if (!storage) {
@@ -72,44 +148,167 @@ function writeJson(key: string, value: unknown) {
   }
 }
 
-export function readCachedKioskEvent<T>(uuid: string) {
-  return readJson<T | null>(getEventCacheKey(uuid), null);
+function removeLocalValue(key: string) {
+  const storage = getStorage();
+
+  if (!storage) {
+    return false;
+  }
+
+  try {
+    storage.removeItem(key);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
-export function writeCachedKioskEvent(uuid: string, event: unknown) {
-  return writeJson(getEventCacheKey(uuid), event);
+async function readStoredValue<T>(key: string, fallback: T): Promise<T> {
+  const db = await openDb();
+
+  if (!db) {
+    return readLocalJson(key, fallback).value;
+  }
+
+  const indexedValue = await new Promise<T | undefined>((resolve) => {
+    try {
+      const transaction = db.transaction(KIOSK_STORE_NAME, "readonly");
+      const store = transaction.objectStore(KIOSK_STORE_NAME);
+      const request = store.get(key);
+
+      request.onsuccess = () => {
+        const record = request.result as StoredRecord | undefined;
+        resolve(record ? (record.value as T) : undefined);
+      };
+
+      request.onerror = () => resolve(undefined);
+    } catch {
+      resolve(undefined);
+    }
+  });
+
+  if (indexedValue !== undefined) {
+    return indexedValue;
+  }
+
+  const localValue = readLocalJson(key, fallback);
+
+  if (localValue.found) {
+    await writeStoredValue(key, localValue.value);
+    return localValue.value;
+  }
+
+  return fallback;
 }
 
-export function listQueuedKioskSignIns(uuid: string) {
-  const items = readJson<QueuedKioskSignIn[]>(getQueueKey(uuid), []);
+async function writeStoredValue(key: string, value: unknown) {
+  const db = await openDb();
+  const localOk = writeLocalJson(key, value);
 
-  return Array.isArray(items)
-    ? items.filter(
-        (item) =>
-          item &&
-          typeof item.clientSubmissionId === "string" &&
-          item.payload &&
-          typeof item.queuedAt === "string"
-      )
-    : [];
+  if (!db) {
+    return localOk;
+  }
+
+  const indexedOk = await new Promise<boolean>((resolve) => {
+    try {
+      const transaction = db.transaction(KIOSK_STORE_NAME, "readwrite");
+      const store = transaction.objectStore(KIOSK_STORE_NAME);
+      const request = store.put({ key, value } satisfies StoredRecord);
+
+      request.onsuccess = () => resolve(true);
+      request.onerror = () => resolve(false);
+    } catch {
+      resolve(false);
+    }
+  });
+
+  return indexedOk || localOk;
 }
 
-export function queueKioskSignIn(uuid: string, item: QueuedKioskSignIn) {
-  const existing = listQueuedKioskSignIns(uuid).filter(
+async function removeStoredValue(key: string) {
+  const db = await openDb();
+  const localOk = removeLocalValue(key);
+
+  if (!db) {
+    return localOk;
+  }
+
+  const indexedOk = await new Promise<boolean>((resolve) => {
+    try {
+      const transaction = db.transaction(KIOSK_STORE_NAME, "readwrite");
+      const store = transaction.objectStore(KIOSK_STORE_NAME);
+      const request = store.delete(key);
+
+      request.onsuccess = () => resolve(true);
+      request.onerror = () => resolve(false);
+    } catch {
+      resolve(false);
+    }
+  });
+
+  return indexedOk || localOk;
+}
+
+function isQueuedKioskSignIn(item: unknown): item is QueuedKioskSignIn {
+  if (!item || typeof item !== "object") {
+    return false;
+  }
+
+  const candidate = item as Partial<QueuedKioskSignIn>;
+
+  return Boolean(
+    typeof candidate.clientSubmissionId === "string" &&
+      candidate.payload &&
+      typeof candidate.queuedAt === "string"
+  );
+}
+
+export async function requestPersistentKioskStorage() {
+  if (typeof navigator === "undefined" || !("storage" in navigator)) {
+    return false;
+  }
+
+  try {
+    if (typeof navigator.storage.persist !== "function") {
+      return false;
+    }
+
+    return await navigator.storage.persist();
+  } catch {
+    return false;
+  }
+}
+
+export async function readCachedKioskEvent<T>(uuid: string) {
+  return readStoredValue<T | null>(getEventCacheKey(uuid), null);
+}
+
+export async function writeCachedKioskEvent(uuid: string, event: unknown) {
+  return writeStoredValue(getEventCacheKey(uuid), event);
+}
+
+export async function listQueuedKioskSignIns(uuid: string) {
+  const items = await readStoredValue<QueuedKioskSignIn[]>(getQueueKey(uuid), []);
+
+  return Array.isArray(items) ? items.filter(isQueuedKioskSignIn) : [];
+}
+
+export async function queueKioskSignIn(uuid: string, item: QueuedKioskSignIn) {
+  const existing = (await listQueuedKioskSignIns(uuid)).filter(
     (entry) => entry.clientSubmissionId !== item.clientSubmissionId
   );
 
   existing.push(item);
 
-  return writeJson(getQueueKey(uuid), existing);
+  return writeStoredValue(getQueueKey(uuid), existing);
 }
 
-function updateQueuedKioskSignIn(
+async function updateQueuedKioskSignIn(
   uuid: string,
   clientSubmissionId: string,
   updater: (item: QueuedKioskSignIn) => QueuedKioskSignIn
 ) {
-  const items = listQueuedKioskSignIns(uuid);
+  const items = await listQueuedKioskSignIns(uuid);
   let found = false;
 
   const nextItems = items.map((item) => {
@@ -125,10 +324,14 @@ function updateQueuedKioskSignIn(
     return false;
   }
 
-  return writeJson(getQueueKey(uuid), nextItems);
+  return writeStoredValue(getQueueKey(uuid), nextItems);
 }
 
-export function markKioskSignInPending(uuid: string, clientSubmissionId: string, error: string) {
+export async function markKioskSignInPending(
+  uuid: string,
+  clientSubmissionId: string,
+  error: string
+) {
   return updateQueuedKioskSignIn(uuid, clientSubmissionId, (item) => ({
     ...item,
     status: "pending",
@@ -137,7 +340,11 @@ export function markKioskSignInPending(uuid: string, clientSubmissionId: string,
   }));
 }
 
-export function markKioskSignInFailed(uuid: string, clientSubmissionId: string, error: string) {
+export async function markKioskSignInFailed(
+  uuid: string,
+  clientSubmissionId: string,
+  error: string
+) {
   return updateQueuedKioskSignIn(uuid, clientSubmissionId, (item) => ({
     ...item,
     status: "failed",
@@ -146,41 +353,24 @@ export function markKioskSignInFailed(uuid: string, clientSubmissionId: string, 
   }));
 }
 
-export function removeQueuedKioskSignIn(uuid: string, clientSubmissionId: string) {
-  const nextItems = listQueuedKioskSignIns(uuid).filter(
+export async function removeQueuedKioskSignIn(uuid: string, clientSubmissionId: string) {
+  const nextItems = (await listQueuedKioskSignIns(uuid)).filter(
     (item) => item.clientSubmissionId !== clientSubmissionId
   );
 
-  return writeJson(getQueueKey(uuid), nextItems);
+  return writeStoredValue(getQueueKey(uuid), nextItems);
 }
 
-export function readLastKioskSyncAt(uuid: string) {
-  const storage = getStorage();
-
-  if (!storage) {
-    return null;
-  }
-
-  return storage.getItem(getLastSyncKey(uuid));
+export async function readLastKioskSyncAt(uuid: string) {
+  return readStoredValue<string | null>(getLastSyncKey(uuid), null);
 }
 
-export function writeLastKioskSyncAt(uuid: string, value: string) {
-  const storage = getStorage();
-
-  if (!storage) {
-    return false;
-  }
-
-  try {
-    storage.setItem(getLastSyncKey(uuid), value);
-    return true;
-  } catch {
-    return false;
-  }
+export async function writeLastKioskSyncAt(uuid: string, value: string) {
+  return writeStoredValue(getLastSyncKey(uuid), value);
 }
 
-export function getKioskQueueSummary(uuid: string) {
-  const items = listQueuedKioskSignIns(uuid);
+export async function getKioskQueueSummary(uuid: string) {
+  const items = await listQueuedKioskSignIns(uuid);
   const pending = items.filter((item) => item.status === "pending");
   const failed = items.filter((item) => item.status === "failed");
 
@@ -189,4 +379,12 @@ export function getKioskQueueSummary(uuid: string) {
     failedCount: failed.length,
     lastError: failed[0]?.lastError ?? pending.find((item) => item.lastError)?.lastError ?? null,
   };
+}
+
+export async function clearKioskOfflineState(uuid: string) {
+  await Promise.all([
+    removeStoredValue(getEventCacheKey(uuid)),
+    removeStoredValue(getQueueKey(uuid)),
+    removeStoredValue(getLastSyncKey(uuid)),
+  ]);
 }

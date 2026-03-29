@@ -82,6 +82,7 @@ async function loadEligibleContext(request: NextRequest, uuid: string): Promise<
 
     const featureAccessTier = resolveFeatureAccessTier({
         subscriptionTier: owner?.subscriptionTier,
+        accountEmail: owner?.email,
         eventFeatureAccessTier: event.featureAccessTier,
         proTrialExpiresAt: event.proTrialExpiresAt,
     });
@@ -90,6 +91,7 @@ async function loadEligibleContext(request: NextRequest, uuid: string): Promise<
         !owner ||
         !hasProFeatureAccess({
             subscriptionTier: owner.subscriptionTier,
+            accountEmail: owner.email,
             eventFeatureAccessTier: event.featureAccessTier,
             proTrialExpiresAt: event.proTrialExpiresAt,
         })
@@ -333,6 +335,10 @@ export async function POST(
         return NextResponse.json({
             reply: result.reply,
             sources: result.sources,
+            suggestedPrompts: result.suggestedPrompts,
+            answerQuality: result.answerQuality,
+            usedWebSearch: result.usedWebSearch,
+            language: result.language,
             sessionId,
             tokensUsed: result.tokensUsed,
             featureAccessTier,

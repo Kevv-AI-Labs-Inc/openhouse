@@ -4,6 +4,7 @@
 
 export type UsageCap = number | null;
 export type FeatureAccessTier = "free" | "trial_pro" | "pro";
+export type SellerReportAccess = "basic" | "detailed";
 
 export const PRO_TRIAL_LIMITS = {
     includedLaunches: 3,

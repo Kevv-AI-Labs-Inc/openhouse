@@ -1,0 +1,54 @@
+name: Runtime Schema Drift
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 14 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  check-production:
+    name: Check production runtime schema
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip when production secrets are missing
+        if: ${{ !secrets.OPENHOUSE_PRODUCTION_BASE_URL || !secrets.OPENHOUSE_INTERNAL_OPS_TOKEN }}
+        run: echo "Production runtime schema check is not configured."
+
+      - name: Call production schema-check endpoint
+        if: ${{ secrets.OPENHOUSE_PRODUCTION_BASE_URL && secrets.OPENHOUSE_INTERNAL_OPS_TOKEN }}
+        env:
+          BASE_URL: ${{ secrets.OPENHOUSE_PRODUCTION_BASE_URL }}
+          TOKEN: ${{ secrets.OPENHOUSE_INTERNAL_OPS_TOKEN }}
+        run: |
+          set -euo pipefail
+          response_file="$(mktemp)"
+          status="$(curl -sS -o "$response_file" -w '%{http_code}' \
+            -H "Authorization: Bearer $TOKEN" \
+            "$BASE_URL/api/internal/ops/schema-check")"
+          cat "$response_file"
+          test "$status" = "200"
+
+  check-preview:
+    name: Check preview runtime schema
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip when preview secrets are missing
+        if: ${{ !secrets.OPENHOUSE_PREVIEW_BASE_URL || !secrets.OPENHOUSE_INTERNAL_OPS_TOKEN }}
+        run: echo "Preview runtime schema check is not configured."
+
+      - name: Call preview schema-check endpoint
+        if: ${{ secrets.OPENHOUSE_PREVIEW_BASE_URL && secrets.OPENHOUSE_INTERNAL_OPS_TOKEN }}
+        env:
+          BASE_URL: ${{ secrets.OPENHOUSE_PREVIEW_BASE_URL }}
+          TOKEN: ${{ secrets.OPENHOUSE_INTERNAL_OPS_TOKEN }}
+        run: |
+          set -euo pipefail
+          response_file="$(mktemp)"
+          status="$(curl -sS -o "$response_file" -w '%{http_code}' \
+            -H "Authorization: Bearer $TOKEN" \
+            "$BASE_URL/api/internal/ops/schema-check")"
+          cat "$response_file"
+          test "$status" = "200"

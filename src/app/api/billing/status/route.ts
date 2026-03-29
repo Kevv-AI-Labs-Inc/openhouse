@@ -24,6 +24,7 @@ export async function GET() {
 
   return NextResponse.json({
     tier: snapshot.tier,
+    internalVipAccess: snapshot.internalVipAccess,
     stripeConfigured: snapshot.stripeConfigured,
     aiConfigured: hasAiConfiguration(),
     emailRelayConfigured: isEmailRelayConfigured(),

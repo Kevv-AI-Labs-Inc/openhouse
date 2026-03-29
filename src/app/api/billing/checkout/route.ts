@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 import {
   getCheckoutCancelUrl,
   getCheckoutSuccessUrl,
-  normalizePlanTier,
+  resolvePlanTier,
 } from "@/lib/billing";
 import { getStripe, isStripeConfigured } from "@/lib/stripe";
 
@@ -38,9 +38,9 @@ export async function POST() {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  if (normalizePlanTier(user.subscriptionTier) === "pro" && user.stripeCustomerId) {
+  if (resolvePlanTier({ subscriptionTier: user.subscriptionTier, email: user.email }) === "pro") {
     return NextResponse.json(
-      { error: "You are already on Pro. Use the billing portal to manage your plan." },
+      { error: "This account already has Pro access." },
       { status: 409 }
     );
   }

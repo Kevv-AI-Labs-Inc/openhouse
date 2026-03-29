@@ -26,6 +26,8 @@ import { buildPublicListingMarketing } from "@/lib/public-listing-view";
 import { publicSignInSchema } from "@/lib/public-signin";
 import { upsertFollowUpDraft } from "@/lib/ai/follow-up-workflow";
 import { isPublicEventVisible } from "@/lib/public-mode";
+import { detectPreferredQaLanguage } from "@/lib/property-qa-language";
+import { getPropertyQaInsights } from "@/lib/property-qa-insights";
 import { ZodError } from "zod";
 
 function buildSignInSuccessResponse(params: {
@@ -93,6 +95,7 @@ export async function GET(
             bedrooms: events.bedrooms,
             bathrooms: events.bathrooms,
             sqft: events.sqft,
+            yearBuilt: events.yearBuilt,
             propertyPhotos: events.propertyPhotos,
             propertyDescription: events.propertyDescription,
             aiQaEnabled: events.aiQaEnabled,
@@ -115,6 +118,7 @@ export async function GET(
 
     const [owner] = await db
         .select({
+            email: users.email,
             subscriptionTier: users.subscriptionTier,
         })
         .from(users)
@@ -123,6 +127,7 @@ export async function GET(
 
     const featureAccessTier = resolveFeatureAccessTier({
         subscriptionTier: owner?.subscriptionTier,
+        accountEmail: owner?.email,
         eventFeatureAccessTier: event.featureAccessTier,
         proTrialExpiresAt: event.proTrialExpiresAt,
     });
@@ -130,6 +135,7 @@ export async function GET(
         event.aiQaEnabled &&
         hasProFeatureAccess({
             subscriptionTier: owner?.subscriptionTier,
+            accountEmail: owner?.email,
             eventFeatureAccessTier: event.featureAccessTier,
             proTrialExpiresAt: event.proTrialExpiresAt,
         }) &&
@@ -140,6 +146,9 @@ export async function GET(
         propertyFacts?: Record<string, unknown>;
         nearbyPoi?: Record<string, unknown>;
     } | null;
+    const qaLanguage = detectPreferredQaLanguage({
+        acceptLanguage: request.headers.get("accept-language"),
+    });
     const marketing = buildPublicListingMarketing({
         propertyAddress: event.propertyAddress,
         propertyType: event.propertyType,
@@ -149,6 +158,16 @@ export async function GET(
         propertyDescription: event.propertyDescription,
         aiQaContext,
     });
+    const qaInsights = getPropertyQaInsights({
+        propertyAddress: event.propertyAddress,
+        listPrice: event.listPrice,
+        propertyDescription: event.propertyDescription,
+        bedrooms: event.bedrooms,
+        bathrooms: event.bathrooms,
+        sqft: event.sqft,
+        yearBuilt: event.yearBuilt,
+        aiQaContext,
+    }, qaLanguage);
     const chatAccess = aiQaEnabled
         ? await resolvePublicChatAccessGrant(db, {
               cookieStore: request.cookies,
@@ -172,6 +191,7 @@ export async function GET(
         bedrooms: event.bedrooms,
         bathrooms: event.bathrooms,
         sqft: event.sqft,
+        yearBuilt: event.yearBuilt,
         propertyPhotos: event.propertyPhotos,
         propertyDescription: event.propertyDescription,
         featureAccessTier,
@@ -179,6 +199,8 @@ export async function GET(
         aiQaOnProPreview: featureAccessTier === "free" && hasAiConfiguration(),
         chatUnlocked: Boolean(chatAccess),
         marketing,
+        qaLanguage,
+        suggestedQuestions: qaInsights.suggestedQuestions,
     });
 }
 
@@ -216,6 +238,7 @@ export async function POST(
     const [ownerRecord] = await db
         .select({
             id: users.id,
+            email: users.email,
             subscriptionTier: users.subscriptionTier,
         })
         .from(users)
@@ -239,6 +262,7 @@ export async function POST(
         const tier = normalizePlanTier(owner.subscriptionTier);
         const featureAccessTier = resolveFeatureAccessTier({
             subscriptionTier: owner.subscriptionTier,
+            accountEmail: owner.email,
             eventFeatureAccessTier: event.featureAccessTier,
             proTrialExpiresAt: event.proTrialExpiresAt,
         });
@@ -334,7 +358,7 @@ export async function POST(
 
             signInId = Number(result.insertId);
         } catch (insertError) {
-            if (data.clientSubmissionId && isMissingClientSubmissionIdColumnError(insertError)) {
+            if (isMissingClientSubmissionIdColumnError(insertError)) {
                 console.warn("[SignIn] clientSubmissionId column missing; retrying insert without offline deduplication metadata.");
 
                 const legacyInsertValues = {

@@ -290,12 +290,11 @@ function buildPropertyQaPublishReadiness(
   };
 
   if (!ready("core")) {
-    warnings.push("Core listing facts are still too thin for reliable public AI answers.");
+    warnings.push("Add a little more core listing detail before turning on public AI Q&A.");
     addAction("Confirm the address, price, description, beds, baths, and square footage before publishing.");
   }
 
   if (!ready("agentPrep")) {
-    warnings.push("The AI still lacks agent-prepared FAQ answers or notes for common buyer questions.");
     addAction("Add at least a few custom FAQ answers or agent notes before relying on the public chat.");
   }
 
@@ -326,15 +325,13 @@ function buildPropertyQaPublishReadiness(
   const missingSupport = ["financial", "building", "neighborhood", "schools", "policies", "interior"].filter(
     (key) => !ready(key as PropertyQaCoverageKey)
   );
-  const hasBlockingGap = !ready("core") || score < 45;
-  const needsReview =
-    !hasBlockingGap &&
-    (!ready("agentPrep") || missingSupport.length >= 3 || score < 70);
+  const hasBlockingGap = !ready("core");
+  const needsReview = !hasBlockingGap && (missingSupport.length >= 2 || score < 65);
 
   if (hasBlockingGap) {
     if (missingSupport.length > 0) {
       warnings.push(
-        `Public AI chat is likely to miss buyer questions about ${missingSupport
+        `The AI will still be thin on buyer questions about ${missingSupport
           .slice(0, 3)
           .map((key) => missing(key as PropertyQaCoverageKey).toLowerCase())
           .join(", ")}.`
@@ -344,7 +341,7 @@ function buildPropertyQaPublishReadiness(
     return {
       status: "blocked",
       label: "Blocked",
-      summary: "Publish-time AI coverage is too thin to trust for public buyer Q&A.",
+      summary: "Public AI Q&A is still missing too many core facts to launch confidently.",
       warnings,
       recommendedActions: recommendedActions.slice(0, 5),
     };
@@ -353,17 +350,17 @@ function buildPropertyQaPublishReadiness(
   if (needsReview) {
     if (missingSupport.length > 0) {
       warnings.push(
-        `Public AI chat can launch, but it still has visible gaps in ${missingSupport
+        `Adding more detail in ${missingSupport
           .slice(0, 3)
           .map((key) => missing(key as PropertyQaCoverageKey).toLowerCase())
-          .join(", ")}.`
+          .join(", ")} will improve answer rate.`
       );
     }
 
     return {
       status: "review",
       label: "Needs review",
-      summary: "Coverage is usable, but you should tighten a few buyer-facing answers before publishing.",
+      summary: "Coverage is usable now, and a few more details will noticeably improve buyer answer quality.",
       warnings,
       recommendedActions: recommendedActions.slice(0, 5),
     };
@@ -372,10 +369,12 @@ function buildPropertyQaPublishReadiness(
   return {
     status: "ready",
     label: "Ready",
-    summary: "Coverage is strong enough to publish the public AI chat with confidence.",
+    summary: "Coverage is in a good place for public AI Q&A.",
     warnings: [],
     recommendedActions: [
-      "Keep the prepared FAQ answers current as pricing, availability, or property details change.",
+      ready("agentPrep")
+        ? "Keep the prepared FAQ answers current as pricing, availability, or property details change."
+        : "If you want even stronger answers, add a few custom FAQ items or agent notes.",
     ],
   };
 }

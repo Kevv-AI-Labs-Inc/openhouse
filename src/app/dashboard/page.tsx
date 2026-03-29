@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -15,34 +16,51 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { requestNewEventDialog } from "@/lib/new-event-trigger";
 
-const METRICS = [
+type DashboardEvent = {
+    totalSignIns: number;
+    hotLeadsCount: number;
+};
+
+type DashboardStats = {
+    totalEvents: number;
+    totalSignIns: number;
+    hotLeads: number;
+    conversionRate: string | null;
+};
+
+const METRIC_CONFIG = [
     {
+        key: "totalEvents" as const,
         title: "Total events",
-        value: "0",
-        note: "Create your first open house to initialize the pipeline",
+        note: "Total open house events created",
+        emptyNote: "Create your first open house",
         icon: CalendarDays,
         iconWrap: "bg-cyan-500/10 text-cyan-700",
     },
     {
+        key: "totalSignIns" as const,
         title: "Total sign-ins",
-        value: "0",
-        note: "Visitors captured by QR and kiosk check-in",
+        note: "Visitors captured by QR and kiosk",
+        emptyNote: "Sign-ins will appear after your first event",
         icon: Users,
         iconWrap: "bg-emerald-500/10 text-emerald-700",
     },
     {
+        key: "hotLeads" as const,
         title: "Hot leads",
-        value: "0",
         note: "High-intent buyers from AI scoring",
+        emptyNote: "Hot leads appear after sign-ins are scored",
         icon: Flame,
         iconWrap: "bg-orange-500/10 text-orange-600",
     },
     {
+        key: "conversionRate" as const,
         title: "Conversion rate",
-        value: "—",
         note: "Lead-to-showing conversion benchmark",
+        emptyNote: "Detailed conversion tracking is not built yet",
         icon: TrendingUp,
         iconWrap: "bg-indigo-500/10 text-indigo-700",
     },
@@ -78,6 +96,52 @@ const PIPELINE_BANDS = [
 
 export default function DashboardPage() {
     const router = useRouter();
+    const [events, setEvents] = useState<DashboardEvent[]>([]);
+    const [statsLoading, setStatsLoading] = useState(true);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        async function loadDashboardEvents() {
+            try {
+                const res = await fetch("/api/events");
+                if (!res.ok) {
+                    throw new Error("Failed to load dashboard events");
+                }
+
+                const data = (await res.json()) as DashboardEvent[];
+                if (!cancelled) {
+                    setEvents(data);
+                }
+            } catch {
+                if (!cancelled) {
+                    setEvents([]);
+                }
+            } finally {
+                if (!cancelled) {
+                    setStatsLoading(false);
+                }
+            }
+        }
+
+        void loadDashboardEvents();
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    const stats = useMemo<DashboardStats>(() => {
+        const totalSignIns = events.reduce((sum, event) => sum + event.totalSignIns, 0);
+        const hotLeads = events.reduce((sum, event) => sum + event.hotLeadsCount, 0);
+
+        return {
+            totalEvents: events.length,
+            totalSignIns,
+            hotLeads,
+            conversionRate: null,
+        };
+    }, [events]);
 
     const handleCreateEventClick = () => {
         requestNewEventDialog();
@@ -96,7 +160,6 @@ export default function DashboardPage() {
                     </Badge>
                     <h1
                         className="mt-4 max-w-3xl text-3xl font-semibold tracking-tight md:text-4xl"
-                        style={{ fontFamily: '"Canela", "Fraunces", "Times New Roman", serif' }}
                     >
                         Run each open house like a repeatable revenue workflow.
                     </h1>
@@ -124,22 +187,46 @@ export default function DashboardPage() {
             </Card>
 
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                {METRICS.map((metric) => (
-                    <Card key={metric.title} className="border-border/55 bg-card/60">
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium text-muted-foreground">
-                                {metric.title}
-                            </CardTitle>
-                            <div className={`rounded-lg p-2 ${metric.iconWrap}`}>
-                                <metric.icon className="h-4 w-4" />
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            <p className="text-3xl font-semibold tracking-tight">{metric.value}</p>
-                            <p className="mt-1 text-xs text-muted-foreground">{metric.note}</p>
-                        </CardContent>
-                    </Card>
-                ))}
+                {METRIC_CONFIG.map((metric) => {
+                    const rawVal = stats[metric.key];
+                    const displayVal =
+                        rawVal === null || rawVal === undefined
+                            ? "—"
+                            : metric.key === "conversionRate"
+                              ? String(rawVal)
+                              : Number(rawVal).toLocaleString();
+                    const isEmpty = !statsLoading && (rawVal === null || rawVal === 0);
+
+                    return (
+                        <Card key={metric.title} className="border-border/55 bg-card/60">
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium text-muted-foreground">
+                                    {metric.title}
+                                </CardTitle>
+                                <div className={`rounded-lg p-2 ${metric.iconWrap}`}>
+                                    <metric.icon className="h-4 w-4" />
+                                </div>
+                            </CardHeader>
+                            <CardContent>
+                                {statsLoading ? (
+                                    <>
+                                        <Skeleton className="h-8 w-16 rounded-lg" />
+                                        <Skeleton className="mt-2 h-3 w-32 rounded" />
+                                    </>
+                                ) : (
+                                    <>
+                                        <p className="font-mono text-3xl font-semibold tracking-tight">
+                                            {displayVal}
+                                        </p>
+                                        <p className="mt-1 text-xs text-muted-foreground">
+                                            {isEmpty ? metric.emptyNote : metric.note}
+                                        </p>
+                                    </>
+                                )}
+                            </CardContent>
+                        </Card>
+                    );
+                })}
             </div>
 
             <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">

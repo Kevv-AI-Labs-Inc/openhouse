@@ -176,8 +176,7 @@ export function LoginAuthHub({
             Secure identity handoff
           </Badge>
           <h1
-            className="mt-6 max-w-2xl text-5xl font-semibold leading-tight tracking-tight"
-            style={{ fontFamily: '"Canela", "Fraunces", "Times New Roman", serif' }}
+            className="mt-6 max-w-2xl text-5xl font-semibold leading-tight tracking-tight font-display"
           >
             {isNewWorkspaceFlow
               ? "Start with the identity your team already trusts."
@@ -234,8 +233,7 @@ export function LoginAuthHub({
             </Link>
 
             <CardTitle
-              className="text-3xl tracking-tight"
-              style={{ fontFamily: '"Canela", "Fraunces", "Times New Roman", serif' }}
+              className="text-3xl tracking-tight font-display"
             >
               {isNewWorkspaceFlow ? "Create your workspace" : "Sign in to OpenHouse"}
             </CardTitle>

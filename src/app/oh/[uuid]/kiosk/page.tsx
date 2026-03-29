@@ -410,7 +410,10 @@ export default function KioskPage({
 
   const color = event?.branding?.primaryColor || "#10b981";
   const heroImage = event?.propertyPhotos?.[0] || event?.branding?.flyerImageUrl || null;
-  const statusBanner = (
+
+  // Only show the status banner for non-idle states — hide it when fully connected and up-to-date
+  const showBanner = !online || syncing || pendingCount > 0 || failedCount > 0 || usingCachedEvent || !!syncError;
+  const statusBanner = showBanner ? (
     <KioskStatusBanner
       online={online}
       pendingCount={pendingCount}
@@ -420,7 +423,7 @@ export default function KioskPage({
       lastSyncAt={lastSyncAt}
       syncError={syncError}
     />
-  );
+  ) : null;
 
   if (phase === "loading") {
     return (
@@ -501,7 +504,7 @@ export default function KioskPage({
                 ) : null}
               </div>
               <div
-                className="mx-auto inline-flex rounded-2xl px-10 py-4 text-xl font-semibold text-white animate-pulse"
+                className="mx-auto inline-flex rounded-2xl px-10 py-4 text-xl font-semibold text-white animate-breathe"
                 style={{ backgroundColor: color }}
               >
                 Tap to Sign In

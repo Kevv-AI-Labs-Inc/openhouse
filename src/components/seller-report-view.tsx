@@ -262,7 +262,7 @@ export function SellerReportView({
           ) : null}
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold">{reportTitle}</h1>
+              <h1 className="text-2xl font-semibold">{reportTitle}</h1>
               {isPublic ? (
                 <Badge className="border-emerald-500/20 bg-emerald-500/10 text-emerald-700">
                   Shared View
@@ -320,7 +320,7 @@ export function SellerReportView({
         <CardContent className="p-6">
           <div className="flex items-start justify-between">
             <div>
-              <h2 className="flex items-center gap-2 text-xl font-bold">
+              <h2 className="flex items-center gap-2 text-xl font-semibold">
                 <MapPin className="h-5 w-5 text-emerald-400" />
                 {event.propertyAddress}
               </h2>
@@ -341,12 +341,47 @@ export function SellerReportView({
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
-        <Card><CardContent className="p-4 text-center"><Users className="mx-auto mb-2 h-6 w-6 text-emerald-400" /><div className="text-3xl font-bold">{uniqueVisitors}</div><div className="text-xs text-muted-foreground">Unique Listing Visitors</div></CardContent></Card>
-        <Card><CardContent className="p-4 text-center"><TrendingUp className="mx-auto mb-2 h-6 w-6 text-blue-400" /><div className="text-3xl font-bold">{uniqueFormStarts}</div><div className="text-xs text-muted-foreground">Unique Form Starts</div></CardContent></Card>
-        <Card><CardContent className="p-4 text-center"><Clock className="mx-auto mb-2 h-6 w-6 text-purple-400" /><div className="text-3xl font-bold">{signIns.length}</div><div className="text-xs text-muted-foreground">Sign-Ins</div></CardContent></Card>
-        <Card><CardContent className="p-4 text-center"><Flame className="mx-auto mb-2 h-6 w-6 text-orange-400" /><div className="text-3xl font-bold">{behaviorQualifiedLeads.length}</div><div className="text-xs text-muted-foreground">Behavior-Qualified Leads</div></CardContent></Card>
-        <Card><CardContent className="p-4 text-center"><Share2 className="mx-auto mb-2 h-6 w-6 text-teal-500" /><div className="text-3xl font-bold">{listingInquiryCaptures}</div><div className="text-xs text-muted-foreground">Long-Term Link Leads</div></CardContent></Card>
+      {/* Metrics strip — asymmetric: two larger primary KPIs left, 3 secondary right */}
+      <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+        <div className="grid grid-cols-2 gap-4">
+          <Card className="border-border/55 bg-card/60">
+            <CardContent className="p-5 text-center">
+              <Users className="mx-auto mb-2 h-6 w-6 text-emerald-400" />
+              <div className="font-mono text-3xl font-semibold">{uniqueVisitors}</div>
+              <div className="mt-1 text-xs text-muted-foreground">Unique Listing Visitors</div>
+            </CardContent>
+          </Card>
+          <Card className="border-border/55 bg-card/60">
+            <CardContent className="p-5 text-center">
+              <Clock className="mx-auto mb-2 h-6 w-6 text-purple-400" />
+              <div className="font-mono text-3xl font-semibold">{signIns.length}</div>
+              <div className="mt-1 text-xs text-muted-foreground">Sign-Ins</div>
+            </CardContent>
+          </Card>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <Card className="border-border/55 bg-card/60">
+            <CardContent className="p-4 text-center">
+              <TrendingUp className="mx-auto mb-1.5 h-5 w-5 text-blue-400" />
+              <div className="font-mono text-2xl font-semibold">{uniqueFormStarts}</div>
+              <div className="mt-0.5 text-xs text-muted-foreground">Form Starts</div>
+            </CardContent>
+          </Card>
+          <Card className="border-border/55 bg-card/60">
+            <CardContent className="p-4 text-center">
+              <Flame className="mx-auto mb-1.5 h-5 w-5 text-orange-400" />
+              <div className="font-mono text-2xl font-semibold">{behaviorQualifiedLeads.length}</div>
+              <div className="mt-0.5 text-xs text-muted-foreground">Behavior-Qualified</div>
+            </CardContent>
+          </Card>
+          <Card className="border-border/55 bg-card/60">
+            <CardContent className="p-4 text-center">
+              <Share2 className="mx-auto mb-1.5 h-5 w-5 text-teal-500" />
+              <div className="font-mono text-2xl font-semibold">{listingInquiryCaptures}</div>
+              <div className="mt-0.5 text-xs text-muted-foreground">Long-Term Leads</div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {!isDetailedReport ? (
@@ -384,14 +419,14 @@ export function SellerReportView({
           <div className="grid gap-3">
             <div className="rounded-2xl border border-border/50 bg-background/75 p-4">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Average AI score</p>
-              <p className="mt-2 text-3xl font-bold">{averageLeadScore}</p>
+              <p className="mt-2 font-mono text-3xl font-semibold">{averageLeadScore}</p>
               <p className="mt-2 text-xs text-muted-foreground">
                 {scoredLeadCount > 0 ? `Based on ${scoredLeadCount} captured visitors with AI lead scoring attached.` : "No AI-scored leads yet for this listing."}
               </p>
             </div>
             <div className="rounded-2xl border border-border/50 bg-background/75 p-4">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Ongoing demand</p>
-              <p className="mt-2 text-3xl font-bold">{inquiryShare}%</p>
+              <p className="mt-2 font-mono text-3xl font-semibold">{inquiryShare}%</p>
               <p className="mt-2 text-xs text-muted-foreground">Share of captured demand generated by the reusable link after the live event.</p>
             </div>
           </div>
@@ -494,7 +529,8 @@ export function SellerReportView({
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-3">
+          {/* Demand curve KPI badges — asymmetric, no 3-col equal */}
+          <div className="grid gap-3 lg:grid-cols-[1fr_1fr_0.8fr]">
             <div
               className={`rounded-2xl border px-4 py-3 ${
                 isPublic
@@ -503,7 +539,7 @@ export function SellerReportView({
               }`}
             >
               <p className="text-xs font-semibold uppercase tracking-[0.14em]">Capture efficiency</p>
-              <p className="mt-2 text-2xl font-semibold">{uniqueVisitorCaptureRate !== null ? `${uniqueVisitorCaptureRate}%` : "—"}</p>
+              <p className="mt-2 font-mono text-2xl font-semibold">{uniqueVisitorCaptureRate !== null ? `${uniqueVisitorCaptureRate}%` : "—"}</p>
               <p className="mt-1 text-xs">
                 {isPublic ? "Share of page visitors who completed sign-in." : benchmarkCaptureTone.label}
               </p>
@@ -516,14 +552,14 @@ export function SellerReportView({
               }`}
             >
               <p className="text-xs font-semibold uppercase tracking-[0.14em]">Lead quality</p>
-              <p className="mt-2 text-2xl font-semibold">{behaviorQualifiedRate}%</p>
+              <p className="mt-2 font-mono text-2xl font-semibold">{behaviorQualifiedRate}%</p>
               <p className="mt-1 text-xs">
                 {isPublic ? "Share of captured visitors showing stronger buying intent." : benchmarkLeadTone.label}
               </p>
             </div>
             <div className="rounded-2xl border border-border/55 bg-background/75 px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Active demand days</p>
-              <p className="mt-2 text-2xl font-semibold">{postEventActivityDays}</p>
+              <p className="mt-2 font-mono text-2xl font-semibold">{postEventActivityDays}</p>
               <p className="mt-1 text-xs text-muted-foreground">
                 Days with tracked visits, form starts, or captures on this listing link.
               </p>
@@ -588,11 +624,14 @@ export function SellerReportView({
       {isDetailedReport ? (
       <Card>
         <CardHeader><CardTitle className="text-base">Seller Talking Points</CardTitle></CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-3">
+        <CardContent className="flex flex-col gap-3">
           {sellerTalkingPoints.map((item) => (
-            <div key={item.title} className="rounded-2xl border border-border/50 bg-background/70 p-4">
-              <p className="text-sm font-semibold">{item.title}</p>
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{item.body}</p>
+            <div key={item.title} className="flex items-start gap-4 rounded-2xl border border-border/50 bg-background/70 p-4">
+              <div className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">{item.title}</p>
+                <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{item.body}</p>
+              </div>
             </div>
           ))}
         </CardContent>

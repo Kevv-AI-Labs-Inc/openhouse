@@ -125,6 +125,7 @@ function formatPropertyFacts(propertyFacts: PropertyContext["propertyFacts"]) {
   const policies = asRecord(facts.policies);
   const neighborhood = asRecord(facts.neighborhood);
   const listing = asRecord(facts.listing);
+  const market = asRecord(facts.market);
 
   const sections: string[] = [];
 
@@ -255,6 +256,42 @@ function formatPropertyFacts(propertyFacts: PropertyContext["propertyFacts"]) {
 
   if (listingLines.length > 0) {
     sections.push(`## Listing Metadata\n- ${listingLines.join("\n- ")}`);
+  }
+
+  const marketLines = [
+    formatCurrency(asNumber(market?.medianSoldPrice))
+      ? `Median sold price: ${formatCurrency(asNumber(market?.medianSoldPrice))}`
+      : null,
+    formatCurrency(asNumber(market?.medianPricePerSqft))
+      ? `Median sold price per sqft: ${formatCurrency(asNumber(market?.medianPricePerSqft))}`
+      : null,
+    asNumber(market?.saleWindowDays) !== null
+      ? `Median sale window: ${asNumber(market?.saleWindowDays)} days`
+      : null,
+    asString(market?.narrative) ? `Market note: ${asString(market?.narrative)}` : null,
+    ...(Array.isArray(market?.comparableSales) ? market.comparableSales : [])
+      .slice(0, 3)
+      .flatMap((item, index) => {
+        const comparable = asRecord(item);
+        if (!comparable) {
+          return [];
+        }
+
+        const parts = [
+          asString(comparable.address) || `Comparable ${index + 1}`,
+          formatCurrency(asNumber(comparable.soldPrice)),
+          asString(comparable.soldAt),
+          asNumber(comparable.distanceMiles) !== null
+            ? `${asNumber(comparable.distanceMiles)} miles away`
+            : null,
+        ].filter(Boolean);
+
+        return parts.length > 0 ? [`Comparable sale: ${parts.join(" · ")}`] : [];
+      }),
+  ].filter(Boolean);
+
+  if (marketLines.length > 0) {
+    sections.push(`## Market Snapshot\n- ${marketLines.join("\n- ")}`);
   }
 
   return sections.length > 0 ? sections.join("\n\n") : null;
@@ -617,6 +654,8 @@ Your job is to answer visitor questions about this listing. Keep answers concise
 - Never switch back to English unless the visitor asked in English.
 - For financing, legal, tax, or offer strategy questions, stay helpful but do not provide professional advice.
 - If you use public web results, include the relevant public web source keys.
+- **Source attribution is mandatory.** At the end of your answer, append a short line indicating the primary data origin, e.g. "[Source: MLS data]", "[Source: Agent-provided FAQ]", "[Source: Public web search]", or "[Source: Listing description]". If multiple sources contributed, list them: "[Sources: MLS data, Public web search]". Use the visitor's language for the label (e.g. "[来源: MLS数据]" in Chinese).
+- When answerQuality is "uncertain", explicitly state which part you could not verify and recommend the visitor confirm with the listing agent.
 - Return JSON only in this shape:
   {"answer": string, "sourceKeys": string[], "answerQuality": "direct" | "partial" | "uncertain", "followUpQuestions": string[]}
 - sourceKeys must only contain keys from the Source Catalog.

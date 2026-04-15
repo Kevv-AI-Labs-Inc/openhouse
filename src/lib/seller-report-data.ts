@@ -1,6 +1,7 @@
 import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { events, publicFunnelEvents, signIns } from "@/lib/db/schema";
+import type { EventPropertyFacts } from "@/lib/listing-import-shared";
 import type {
   SellerReportBenchmark,
   SellerReportEvent,
@@ -424,6 +425,12 @@ async function buildSellerReportEventFromEvent(
           ),
         }
       : null;
+  const propertyFacts =
+    event.aiQaContext?.propertyFacts &&
+    typeof event.aiQaContext.propertyFacts === "object" &&
+    !Array.isArray(event.aiQaContext.propertyFacts)
+      ? (event.aiQaContext.propertyFacts as EventPropertyFacts)
+      : null;
 
   return {
     id: event.id,
@@ -452,5 +459,6 @@ async function buildSellerReportEventFromEvent(
       funnelEvents: eventFunnelEvents,
     }),
     benchmark: hydratedBenchmark,
+    propertyFacts,
   };
 }

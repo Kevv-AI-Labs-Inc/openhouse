@@ -94,8 +94,10 @@ export default function PublicSignInPage({
   const [isPreApproved, setIsPreApproved] = useState("");
   const [interestLevel, setInterestLevel] = useState("");
   const [buyingTimeline, setBuyingTimeline] = useState("");
+  const [priceRange, setPriceRange] = useState("");
   const [customAnswers, setCustomAnswers] = useState<Record<string, string>>({});
   const [showOptionalDetails, setShowOptionalDetails] = useState(false);
+  const [didAutoExpandOptionalDetails, setDidAutoExpandOptionalDetails] = useState(false);
 
   useEffect(() => {
     fetch(`/api/public/event/${uuid}`)
@@ -136,9 +138,11 @@ export default function PublicSignInPage({
   useEffect(() => {
     if (phase !== "success" || !event?.aiQaEnabled || !chatUnlocked) return;
 
+    // Show the success animation for at least 800ms, then redirect immediately.
+    // Previously this was a fixed 1400ms delay regardless of API response timing.
     const timer = window.setTimeout(() => {
       router.replace(`/oh/${uuid}/chat`);
-    }, 1400);
+    }, 800);
 
     return () => window.clearTimeout(timer);
   }, [chatUnlocked, event?.aiQaEnabled, phase, router, uuid]);
@@ -158,6 +162,7 @@ export default function PublicSignInPage({
           isPreApproved: isPreApproved || undefined,
           interestLevel: interestLevel || undefined,
           buyingTimeline: buyingTimeline || undefined,
+          priceRange: priceRange || undefined,
           customAnswers: Object.keys(customAnswers).length > 0 ? customAnswers : undefined,
         }),
       });
@@ -197,6 +202,12 @@ export default function PublicSignInPage({
     funnelTrackingRef.current.formStartTracked = true;
     void trackFunnelStage("form_start");
   }, [trackFunnelStage]);
+
+  const handleOptionalDetailsFocusCapture = useCallback(() => {
+    if (didAutoExpandOptionalDetails) return;
+    setShowOptionalDetails(true);
+    setDidAutoExpandOptionalDetails(true);
+  }, [didAutoExpandOptionalDetails]);
 
   if (phase === "loading") {
     return (
@@ -350,7 +361,14 @@ export default function PublicSignInPage({
                 <p className="text-sm text-muted-foreground">{formDescription}</p>
               </CardHeader>
               <CardContent>
-                <form onSubmit={handleSubmit} onFocusCapture={handleFormFocusCapture} className="space-y-5">
+                <form
+                  onSubmit={handleSubmit}
+                  onFocusCapture={() => {
+                    handleFormFocusCapture();
+                    handleOptionalDetailsFocusCapture();
+                  }}
+                  className="space-y-5"
+                >
                   <div className="space-y-2">
                     <Label>Full Name *</Label>
                     <Input
@@ -469,6 +487,14 @@ export default function PublicSignInPage({
                               { value: "over_12_months", label: "12+ months" },
                               { value: "just_browsing", label: "Just browsing" },
                             ]}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Budget / price range</Label>
+                          <Input
+                            value={priceRange}
+                            placeholder="Example: $800k-$1.0M or under $1.2M"
+                            onChange={(event) => setPriceRange(event.target.value)}
                           />
                         </div>
                       </div>

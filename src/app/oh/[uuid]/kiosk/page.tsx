@@ -14,6 +14,7 @@ import {
   WifiOff,
   AlertTriangle,
   RefreshCw,
+  Maximize,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { OptionButtonGroup } from "@/components/ui/option-button-group";
@@ -164,8 +165,11 @@ export default function KioskPage({
   const [hasAgent, setHasAgent] = useState("");
   const [isPreApproved, setIsPreApproved] = useState("");
   const [interestLevel, setInterestLevel] = useState("");
+  const [buyingTimeline, setBuyingTimeline] = useState("");
+  const [priceRange, setPriceRange] = useState("");
   const [customAnswers, setCustomAnswers] = useState<Record<string, string>>({});
   const [showOptionalDetails, setShowOptionalDetails] = useState(false);
+  const [didAutoExpandOptionalDetails, setDidAutoExpandOptionalDetails] = useState(false);
 
   const syncInFlightRef = useRef(false);
 
@@ -184,7 +188,11 @@ export default function KioskPage({
     setHasAgent("");
     setIsPreApproved("");
     setInterestLevel("");
+    setBuyingTimeline("");
+    setPriceRange("");
     setCustomAnswers({});
+    setShowOptionalDetails(false);
+    setDidAutoExpandOptionalDetails(false);
   }, []);
 
   const flushQueuedSignIns = useCallback(async () => {
@@ -370,6 +378,8 @@ export default function KioskPage({
       hasAgent: hasAgent ? hasAgent === "yes" : undefined,
       isPreApproved: isPreApproved || undefined,
       interestLevel: interestLevel || undefined,
+      buyingTimeline: buyingTimeline || undefined,
+      priceRange: priceRange || undefined,
       customAnswers: Object.keys(customAnswers).length > 0 ? customAnswers : undefined,
     };
 
@@ -413,6 +423,26 @@ export default function KioskPage({
 
   // Only show the status banner for non-idle states — hide it when fully connected and up-to-date
   const showBanner = !online || syncing || pendingCount > 0 || failedCount > 0 || usingCachedEvent || !!syncError;
+  const handleOptionalDetailsFocusCapture = useCallback(() => {
+    if (didAutoExpandOptionalDetails) {
+      return;
+    }
+
+    setShowOptionalDetails(true);
+    setDidAutoExpandOptionalDetails(true);
+  }, [didAutoExpandOptionalDetails]);
+
+  const enterFullscreen = useCallback(() => {
+    const el = document.documentElement as HTMLElement & {
+      webkitRequestFullscreen?: () => Promise<void>;
+    };
+    if (el.requestFullscreen) {
+      void el.requestFullscreen();
+    } else if (el.webkitRequestFullscreen) {
+      void el.webkitRequestFullscreen();
+    }
+  }, []);
+
   const statusBanner = showBanner ? (
     <KioskStatusBanner
       online={online}
@@ -511,6 +541,17 @@ export default function KioskPage({
               </div>
             </div>
           </div>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              enterFullscreen();
+            }}
+            className="fixed bottom-6 right-6 z-30 rounded-full border border-border/60 bg-white/90 p-3 shadow-lg backdrop-blur"
+            aria-label="Enter fullscreen"
+          >
+            <Maximize className="h-5 w-5 text-muted-foreground" />
+          </button>
         </div>
       </>
     );
@@ -544,7 +585,7 @@ export default function KioskPage({
   return (
     <>
       {statusBanner}
-      <div className="fixed inset-0 overflow-auto bg-gradient-to-br from-emerald-50 via-white to-cyan-50 pt-20">
+      <div className="fixed inset-0 overflow-auto bg-gradient-to-br from-emerald-50 via-white to-cyan-50 pt-20" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
         <div className="mx-auto max-w-xl px-6 py-8">
           <div className="mb-6 text-center">
             {heroImage && (
@@ -572,6 +613,7 @@ export default function KioskPage({
 
           <form
             onSubmit={handleSubmit}
+            onFocusCapture={handleOptionalDetailsFocusCapture}
             className="space-y-4 rounded-[1.75rem] border border-border/60 bg-white/92 p-6 shadow-2xl shadow-emerald-900/5 backdrop-blur"
           >
             <div>
@@ -674,6 +716,32 @@ export default function KioskPage({
                         { value: "somewhat", label: "Somewhat Interested" },
                         { value: "just_looking", label: "Just Looking" },
                       ]}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-sm text-foreground/90">Buying timeline</label>
+                    <OptionButtonGroup
+                      value={buyingTimeline}
+                      onChange={setBuyingTimeline}
+                      accentColor={color}
+                      options={[
+                        { value: "0_3_months", label: "0–3 months" },
+                        { value: "3_6_months", label: "3–6 months" },
+                        { value: "6_12_months", label: "6–12 months" },
+                        { value: "over_12_months", label: "12+ months" },
+                        { value: "just_browsing", label: "Just browsing" },
+                      ]}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-sm text-foreground/90">Budget / price range</label>
+                    <Input
+                      className="border-border/70 bg-white"
+                      value={priceRange}
+                      placeholder="Example: $800k-$1.0M or under $1.2M"
+                      onChange={(eventChange) => setPriceRange(eventChange.target.value)}
                     />
                   </div>
                 </div>

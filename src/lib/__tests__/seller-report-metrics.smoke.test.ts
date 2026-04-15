@@ -44,6 +44,15 @@ describe("buildSellerReportMetrics", () => {
     expect(result.directBuyerPercent).toBe(0);
     expect(result.inquiryShare).toBe(0);
     expect(result.onSiteShare).toBe(0);
+    expect(result.readyNowCount).toBe(0);
+    expect(result.nurtureLaterCount).toBe(0);
+    expect(result.missingIntentSignalsCount).toBe(0);
+    expect(result.interestLevelDistribution).toEqual([
+      { key: "very", label: "Very interested", count: 0, percentage: 0 },
+      { key: "somewhat", label: "Somewhat interested", count: 0, percentage: 0 },
+      { key: "just_looking", label: "Just looking", count: 0, percentage: 0 },
+      { key: "unknown", label: "No answer", count: 0, percentage: 0 },
+    ]);
   });
 
   it("computes capture rate from funnel metrics", () => {
@@ -163,5 +172,63 @@ describe("buildSellerReportMetrics", () => {
     expect(result.uniqueVisitors).toBe(0);
     expect(result.uniqueFormStarts).toBe(0);
     expect(result.uniqueVisitorCaptureRate).toBeNull();
+  });
+
+  it("builds visitor intent distributions and budget signals", () => {
+    const result = buildSellerReportMetrics({
+      signIns: [
+        makeSignIn({
+          id: 1,
+          interestLevel: "very",
+          buyingTimeline: "0_3_months",
+          isPreApproved: "yes",
+          priceRange: "$800k-$1.0M",
+          leadTier: "hot",
+        }),
+        makeSignIn({
+          id: 2,
+          interestLevel: "somewhat",
+          buyingTimeline: "6_12_months",
+          priceRange: "$800k-$1.0M",
+          leadTier: "warm",
+        }),
+        makeSignIn({
+          id: 3,
+          interestLevel: null,
+          buyingTimeline: null,
+          priceRange: null,
+          leadTier: null,
+        }),
+      ],
+    });
+
+    expect(result.readyNowCount).toBe(1);
+    expect(result.nurtureLaterCount).toBe(1);
+    expect(result.missingIntentSignalsCount).toBe(1);
+    expect(result.interestLevelDistribution).toEqual([
+      { key: "very", label: "Very interested", count: 1, percentage: 33 },
+      { key: "somewhat", label: "Somewhat interested", count: 1, percentage: 33 },
+      { key: "unknown", label: "No answer", count: 1, percentage: 33 },
+    ]);
+    expect(result.buyingTimelineDistribution).toContainEqual({
+      key: "0_3_months",
+      label: "0-3 months",
+      count: 1,
+      percentage: 33,
+    });
+    expect(result.leadTierDistribution).toContainEqual({
+      key: "hot",
+      label: "Hot",
+      count: 1,
+      percentage: 33,
+    });
+    expect(result.priceRangeResponses).toEqual([
+      {
+        key: "$800k-$1.0M",
+        label: "$800k-$1.0M",
+        count: 2,
+        percentage: 67,
+      },
+    ]);
   });
 });

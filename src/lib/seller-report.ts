@@ -1,3 +1,4 @@
+import type { EventPropertyFacts } from "@/lib/listing-import-shared";
 import type { SellerReportAccess } from "@/lib/plans";
 
 export interface SellerReportLeadScore {
@@ -51,6 +52,13 @@ export interface SellerReportBenchmark {
   inquiryShare: SellerReportBenchmarkMetric;
 }
 
+export interface SellerReportDistributionItem {
+  key: string;
+  label: string;
+  count: number;
+  percentage: number;
+}
+
 export interface SellerReportEvent {
   id: number;
   uuid: string;
@@ -71,6 +79,7 @@ export interface SellerReportEvent {
   funnelMetrics: SellerReportFunnelMetrics;
   activitySeries: SellerReportActivityPoint[];
   benchmark: SellerReportBenchmark | null;
+  propertyFacts?: EventPropertyFacts | null;
   reportAccess?: SellerReportAccess;
 }
 

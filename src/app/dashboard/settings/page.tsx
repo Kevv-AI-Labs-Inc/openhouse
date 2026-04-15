@@ -82,6 +82,7 @@ type SettingsAction =
   | "mode-draft"
   | "domain-save"
   | "domain-refresh"
+  | "domain-test"
   | "domain-clear"
   | null;
 
@@ -427,6 +428,33 @@ export default function SettingsPage() {
       setAction(null);
     }
   }, [loadBillingStatus]);
+
+  const handleTestCustomDomain = useCallback(async () => {
+    try {
+      setAction("domain-test");
+      const res = await fetch("/api/integrations/custom-domain/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          toEmail: customReplyTo || session?.user?.email || undefined,
+        }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to send custom-domain test email");
+      }
+
+      toast.success(`Test email sent to ${data.toEmail}.`);
+      await loadBillingStatus();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to send custom-domain test email";
+      toast.error(message);
+    } finally {
+      setAction(null);
+    }
+  }, [customReplyTo, loadBillingStatus, session?.user?.email]);
 
   return (
     <div className="max-w-4xl space-y-6">
@@ -897,6 +925,24 @@ export default function SettingsPage() {
                     Refresh verification
                   </Button>
                   <Button
+                    variant="outline"
+                    disabled={
+                      !isPro ||
+                      billingStatus.customSendingDomainStatus !== "verified" ||
+                      action === "domain-test"
+                    }
+                    onClick={() => {
+                      void handleTestCustomDomain();
+                    }}
+                  >
+                    {action === "domain-test" ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Mail className="mr-2 h-4 w-4" />
+                    )}
+                    Send test email
+                  </Button>
+                  <Button
                     variant={
                       billingStatus.followUpEmailMode === "custom_domain" ? "outline" : "default"
                     }
@@ -939,6 +985,11 @@ export default function SettingsPage() {
                     Configure Resend before using a Pro team domain relay.
                   </p>
                 )}
+                {billingStatus.customSendingDomainStatus === "verified" ? (
+                  <p className="mt-4 text-xs text-muted-foreground">
+                    Send a live test message to {customReplyTo || session?.user?.email || "your inbox"} before turning on the team domain for follow-ups.
+                  </p>
+                ) : null}
               </div>
 
               <div className="flex items-center justify-between rounded-2xl border border-border/60 bg-background/60 p-4">

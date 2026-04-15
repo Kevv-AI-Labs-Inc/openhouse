@@ -60,6 +60,27 @@ function formatDelta(delta: number | null, suffix = "") {
   return `${delta > 0 ? "+" : ""}${delta}${suffix}`;
 }
 
+function formatCurrency(value: number | null | undefined) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? `$${Math.round(value).toLocaleString()}`
+    : null;
+}
+
+function formatDistanceMiles(value: number | null | undefined) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? `${value.toFixed(value < 1 ? 1 : 0)} mi`
+    : null;
+}
+
+function formatMaybeDate(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : format(parsed, "MMM d, yyyy");
+}
+
 function getComparisonTone(delta: number | null) {
   if (delta === null) {
     return {
@@ -118,6 +139,9 @@ export function SellerReportView({
     withAgent,
     preApproved,
     noAgent,
+    readyNowCount,
+    nurtureLaterCount,
+    missingIntentSignalsCount,
     openHouseCaptures,
     listingInquiryCaptures,
     scoredLeadCount,
@@ -127,6 +151,10 @@ export function SellerReportView({
     directBuyerPercent,
     inquiryShare,
     onSiteShare,
+    interestLevelDistribution,
+    buyingTimelineDistribution,
+    leadTierDistribution,
+    priceRangeResponses,
   } = buildSellerReportMetrics({
     signIns: attributedSignIns,
     funnelMetrics: event.funnelMetrics,
@@ -146,6 +174,76 @@ export function SellerReportView({
   const benchmarkBehaviorMedian = benchmark?.behaviorQualifiedLeadRate.median ?? null;
   const benchmarkBehaviorDelta = benchmark?.behaviorQualifiedLeadRate.delta ?? null;
   const benchmarkInquiryMedian = benchmark?.inquiryShare.median ?? null;
+  const financialFacts = event.propertyFacts?.financial;
+  const neighborhoodFacts = event.propertyFacts?.neighborhood;
+  const listingFacts = event.propertyFacts?.listing;
+  const marketFacts = event.propertyFacts?.market;
+  const comparableSales = (marketFacts?.comparableSales ?? []).slice(0, 3);
+  const keyMarketFacts = [
+    listingFacts?.status ? `Listing status: ${listingFacts.status}` : null,
+    typeof listingFacts?.daysOnMarket === "number"
+      ? `Days on market: ${listingFacts.daysOnMarket}`
+      : null,
+    formatCurrency(financialFacts?.annualTaxes)
+      ? `Annual taxes: ${formatCurrency(financialFacts?.annualTaxes)}`
+      : null,
+    formatCurrency(financialFacts?.hoaFee)
+      ? `HOA: ${formatCurrency(financialFacts?.hoaFee)}/mo`
+      : null,
+    formatCurrency(financialFacts?.commonCharges)
+      ? `Common charges: ${formatCurrency(financialFacts?.commonCharges)}/mo`
+      : null,
+    formatCurrency(financialFacts?.estimatedMonthlyCarry)
+      ? `Estimated carry: ${formatCurrency(financialFacts?.estimatedMonthlyCarry)}`
+      : null,
+  ].filter((item): item is string => Boolean(item));
+  const neighborhoodHighlights = [
+    ...(neighborhoodFacts?.nearbyTransit ?? []),
+    ...(neighborhoodFacts?.nearbyHighlights ?? []),
+  ].slice(0, 4);
+  const hasMarketSnapshot =
+    keyMarketFacts.length > 0 ||
+    comparableSales.length > 0 ||
+    Boolean(marketFacts?.narrative) ||
+    Boolean(marketFacts?.medianSoldPrice) ||
+    Boolean(marketFacts?.medianPricePerSqft) ||
+    Boolean(neighborhoodFacts?.name) ||
+    neighborhoodHighlights.length > 0;
+
+  const renderDistributionBlock = (
+    title: string,
+    items: Array<{ key: string; label: string; count: number; percentage: number }>,
+    emptyLabel: string
+  ) => (
+    <div className="rounded-2xl border border-border/55 bg-background/75 p-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        {title}
+      </p>
+      {items.length > 0 ? (
+        <div className="mt-4 space-y-3">
+          {items.map((item) => (
+            <div key={`${title}-${item.key}`} className="space-y-1.5">
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span className="text-foreground">{item.label}</span>
+                <span className="font-medium text-muted-foreground">
+                  {item.count} ({item.percentage}%)
+                </span>
+              </div>
+              <div className="h-2 rounded-full bg-muted/35">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500"
+                  style={{ width: `${Math.max(item.count > 0 ? 10 : 0, item.percentage)}%` }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-4 text-sm text-muted-foreground">{emptyLabel}</p>
+      )}
+    </div>
+  );
+
   const internalExecutiveSummary = [
     uniqueVisitors === 0
       ? "Traffic tracking is live, but this listing has not recorded enough public activity yet to benchmark conversion performance."
@@ -519,6 +617,250 @@ export function SellerReportView({
           <div className="flex items-center justify-between text-sm"><span className="text-muted-foreground">Direct buyer opportunities</span><span className="font-medium">{noAgent} ({directBuyerPercent}%)</span></div>
         </CardContent>
       </Card>
+
+      {isDetailedReport ? (
+        <Card className="border-border/60 bg-card/60">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Visitor Intent Distribution</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Show the seller how intent breaks down across urgency, seriousness, and AI lead quality.
+            </p>
+          </CardHeader>
+          <CardContent className="grid gap-4 lg:grid-cols-3">
+            {renderDistributionBlock(
+              "Interest level",
+              interestLevelDistribution,
+              "No visitor intent responses yet."
+            )}
+            {renderDistributionBlock(
+              "Buying timeline",
+              buyingTimelineDistribution,
+              "No timeline responses yet."
+            )}
+            {renderDistributionBlock(
+              "Lead tier",
+              leadTierDistribution,
+              "AI lead tiers will populate after scoring runs."
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {isDetailedReport ? (
+        <Card className="border-border/60 bg-card/60">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Buyer Readiness</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Separate visitors who are ready to move now from the longer nurture pipeline.
+            </p>
+          </CardHeader>
+          <CardContent className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-border/55 bg-background/75 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  Ready now
+                </p>
+                <p className="mt-3 font-mono text-3xl font-semibold">{readyNowCount}</p>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Buyers showing near-term timing or strong financing readiness.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border/55 bg-background/75 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  Longer nurture
+                </p>
+                <p className="mt-3 font-mono text-3xl font-semibold">{nurtureLaterCount}</p>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Visitors who need longer-term follow-up before a decision window opens.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border/55 bg-background/75 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  Missing signals
+                </p>
+                <p className="mt-3 font-mono text-3xl font-semibold">{missingIntentSignalsCount}</p>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Contacts captured without budget, timeline, or explicit interest details.
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-border/55 bg-background/75 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                Budget signals
+              </p>
+              {priceRangeResponses.length > 0 ? (
+                <div className="mt-4 space-y-3">
+                  {priceRangeResponses.map((item) => (
+                    <div key={item.key} className="rounded-xl border border-border/50 bg-background/80 p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-medium text-foreground">{item.label}</p>
+                        <Badge variant="outline" className="text-xs">
+                          {item.count} lead{item.count === 1 ? "" : "s"}
+                        </Badge>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Mentioned by {item.percentage}% of captured visitors.
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-4 text-sm text-muted-foreground">
+                  Budget ranges will appear here once visitors start filling in the optional price field.
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {isDetailedReport && hasMarketSnapshot ? (
+        <Card className="border-border/60 bg-card/60">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Market Context Snapshot</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Use imported listing facts and optional comparable-sales data to anchor the seller conversation.
+            </p>
+          </CardHeader>
+          <CardContent className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
+            <div className="space-y-3">
+              {keyMarketFacts.length > 0 ? (
+                <div className="rounded-2xl border border-border/55 bg-background/75 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    Listing signals
+                  </p>
+                  <div className="mt-3 space-y-2 text-sm text-muted-foreground">
+                    {keyMarketFacts.map((fact) => (
+                      <p key={fact}>{fact}</p>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {neighborhoodFacts?.name || neighborhoodHighlights.length > 0 ? (
+                <div className="rounded-2xl border border-border/55 bg-background/75 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    Neighborhood context
+                  </p>
+                  {neighborhoodFacts?.name ? (
+                    <p className="mt-3 text-sm font-medium text-foreground">{neighborhoodFacts.name}</p>
+                  ) : null}
+                  {neighborhoodHighlights.length > 0 ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {neighborhoodHighlights.map((item) => (
+                        <Badge key={item} variant="outline" className="text-xs">
+                          {item}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {marketFacts?.narrative ? (
+                <div className="rounded-2xl border border-border/55 bg-background/75 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    Market note
+                  </p>
+                  <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                    {marketFacts.narrative}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="space-y-3">
+              {marketFacts?.medianSoldPrice || marketFacts?.medianPricePerSqft || marketFacts?.saleWindowDays ? (
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-2xl border border-border/55 bg-background/75 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                      Median sold price
+                    </p>
+                    <p className="mt-3 text-lg font-semibold">
+                      {formatCurrency(marketFacts?.medianSoldPrice) || "—"}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-border/55 bg-background/75 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                      Median $ / sqft
+                    </p>
+                    <p className="mt-3 text-lg font-semibold">
+                      {formatCurrency(marketFacts?.medianPricePerSqft) || "—"}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-border/55 bg-background/75 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                      Sale window
+                    </p>
+                    <p className="mt-3 text-lg font-semibold">
+                      {typeof marketFacts?.saleWindowDays === "number"
+                        ? `${marketFacts.saleWindowDays} days`
+                        : "—"}
+                    </p>
+                  </div>
+                </div>
+              ) : null}
+
+              {comparableSales.length > 0 ? (
+                <div className="rounded-2xl border border-border/55 bg-background/75 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                      Comparable sales
+                    </p>
+                    {marketFacts?.source ? (
+                      <Badge variant="outline" className="text-[10px]">
+                        {marketFacts.source}
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <div className="mt-4 space-y-3">
+                    {comparableSales.map((sale, index) => (
+                      <div
+                        key={`${sale.address || "sale"}-${index}`}
+                        className="rounded-xl border border-border/50 bg-background/80 p-3"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-medium text-foreground">
+                              {sale.address || `Comparable ${index + 1}`}
+                            </p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {[
+                                formatMaybeDate(sale.soldAt),
+                                formatDistanceMiles(sale.distanceMiles),
+                              ]
+                                .filter(Boolean)
+                                .join(" · ") || "Recent sale"}
+                            </p>
+                          </div>
+                          <p className="text-sm font-semibold text-foreground">
+                            {formatCurrency(sale.soldPrice) || "—"}
+                          </p>
+                        </div>
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          {[
+                            typeof sale.beds === "number" ? `${sale.beds} bd` : null,
+                            sale.baths ? `${sale.baths} ba` : null,
+                            typeof sale.sqft === "number" ? `${sale.sqft.toLocaleString()} sqft` : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
+                        {sale.notes ? (
+                          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                            {sale.notes}
+                          </p>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {isDetailedReport ? (
       <Card className="border-border/60 bg-card/60">

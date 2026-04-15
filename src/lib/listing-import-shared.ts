@@ -70,6 +70,23 @@ export type EventPropertyFacts = {
     source?: string | null;
     fallbackUsed?: boolean | null;
   };
+  market?: {
+    medianSoldPrice?: number | null;
+    medianPricePerSqft?: number | null;
+    saleWindowDays?: number | null;
+    source?: string | null;
+    narrative?: string | null;
+    comparableSales?: Array<{
+      address?: string | null;
+      soldPrice?: number | null;
+      soldAt?: string | null;
+      beds?: number | null;
+      baths?: string | null;
+      sqft?: number | null;
+      distanceMiles?: number | null;
+      notes?: string | null;
+    }>;
+  };
 };
 
 export type EventAiQaContext = {

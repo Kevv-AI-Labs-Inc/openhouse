@@ -152,8 +152,9 @@ describe("type shape contracts", () => {
       policies: { subletAllowed: "yes" },
       neighborhood: { name: "Brooklyn Heights" },
       listing: { status: "active" },
+      market: { medianSoldPrice: 975000 },
     };
 
-    expect(Object.keys(facts)).toHaveLength(7);
+    expect(Object.keys(facts)).toHaveLength(8);
   });
 });

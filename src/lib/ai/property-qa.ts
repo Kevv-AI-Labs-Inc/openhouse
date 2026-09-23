@@ -7,6 +7,7 @@
  * 3) imported MLS payload fallback
  * 4) optional constrained public-web search for missing public facts
  */
+import { financialFactLines } from "@/lib/property-costs";
 import type { EventPropertyFacts } from "@/lib/listing-import-shared";
 import { buildPropertyQaRecoveryQuestions } from "@/lib/property-qa-insights";
 import {
@@ -130,27 +131,7 @@ function formatPropertyFacts(propertyFacts: PropertyContext["propertyFacts"]) {
   const sections: string[] = [];
 
   const financialLines = [
-    formatCurrency(asNumber(financial?.annualTaxes))
-      ? `Annual taxes: ${formatCurrency(asNumber(financial?.annualTaxes))}`
-      : null,
-    formatCurrency(asNumber(financial?.monthlyTaxes))
-      ? `Monthly taxes: ${formatCurrency(asNumber(financial?.monthlyTaxes))}`
-      : null,
-    formatCurrency(asNumber(financial?.commonCharges))
-      ? `Common charges: ${formatCurrency(asNumber(financial?.commonCharges))}/month`
-      : null,
-    formatCurrency(asNumber(financial?.maintenanceFee))
-      ? `Maintenance: ${formatCurrency(asNumber(financial?.maintenanceFee))}/month`
-      : null,
-    formatCurrency(asNumber(financial?.hoaFee))
-      ? `HOA fee: ${formatCurrency(asNumber(financial?.hoaFee))}/month`
-      : null,
-    formatCurrency(asNumber(financial?.assessmentFee))
-      ? `Assessment fee: ${formatCurrency(asNumber(financial?.assessmentFee))}/month`
-      : null,
-    formatCurrency(asNumber(financial?.estimatedMonthlyCarry))
-      ? `Estimated monthly carrying cost: ${formatCurrency(asNumber(financial?.estimatedMonthlyCarry))}`
-      : null,
+    ...financialFactLines(financial, building?.buildingType),
     asString(financial?.flipTax) ? `Flip tax: ${asString(financial?.flipTax)}` : null,
     asString(financial?.taxAbatement)
       ? `Tax abatement: ${asString(financial?.taxAbatement)}`
@@ -195,10 +176,15 @@ function formatPropertyFacts(propertyFacts: PropertyContext["propertyFacts"]) {
       ? `Storage: ${formatBoolean(asBoolean(building?.storage))}`
       : null,
     ...asStringArray(building?.parking).map((item) => `Parking: ${item}`),
+    asNumber(building?.garageSpaces) !== null ? `Garage spaces: ${asNumber(building?.garageSpaces)}` : null,
+    asNumber(building?.parkingTotal) !== null ? `Total parking spaces: ${asNumber(building?.parkingTotal)}` : null,
     ...asStringArray(building?.laundry).map((item) => `Laundry: ${item}`),
     ...asStringArray(building?.amenities).map((item) => `Amenity: ${item}`),
     ...asStringArray(building?.outdoorSpace).map((item) => `Outdoor space: ${item}`),
     ...asStringArray(building?.utilitiesIncluded).map((item) => `Included utility/service: ${item}`),
+    ...asStringArray(building?.utilities).map((item) => `Utility: ${item}`),
+    ...asStringArray(building?.waterSource).map((item) => `Water source: ${item}`),
+    ...asStringArray(building?.sewer).map((item) => `Sewer: ${item}`),
   ].filter(Boolean);
 
   if (buildingLines.length > 0) {
@@ -648,6 +634,8 @@ Your job is to answer visitor questions about this listing. Keep answers concise
 - Prefer structured facts over raw payload.
 - Use public web results only for missing public information, never to override listing facts.
 - Never invent taxes, fees, school assignments, or building rules.
+- Preserve estimated maintenance labels and each explicit source billing period. A legacy HOA/maintenance label without structured frequency does not establish a monthly charge, even if an old FAQ says /month.
+- Do not sum property taxes and maintenance or quote legacy estimatedMonthlyCarry values: fees may overlap and the available costs may be incomplete.
 - If exact information is missing, answer the supported portion first, then clearly note what still needs confirmation from the listing agent.
 - Do not refuse the whole question when you can answer part of it reliably.
 - Keep answers short: normally 2 to 5 sentences.

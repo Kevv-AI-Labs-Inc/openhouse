@@ -1,3 +1,4 @@
+import { financialFactLines, isCooperativeOwnership, sourceAmount } from "@/lib/property-costs";
 import { z } from "zod";
 import { PDFParse } from "pdf-parse";
 import { chatCompletion, hasAiConfiguration } from "@/lib/ai/openai";
@@ -413,10 +414,6 @@ function pickStringFromRecords(records: Array<Record<string, unknown>>, keys: st
   return pickFromRecords(records, keys, toStringValue);
 }
 
-function pickNumberFromRecords(records: Array<Record<string, unknown>>, keys: string[]) {
-  return pickFromRecords(records, keys, toNumber);
-}
-
 function pickBooleanFromRecords(records: Array<Record<string, unknown>>, keys: string[]) {
   return pickFromRecords(records, keys, toBoolean);
 }
@@ -471,50 +468,27 @@ function buildPropertyFacts(
   records: Array<Record<string, unknown>>,
   listing: Omit<ImportedListing, "propertyFacts">
 ): EventPropertyFacts | null {
-  const annualTaxes = pickNumberFromRecords(records, [
-    "annualTaxes",
-    "AnnualTaxes",
-    "taxAnnualAmount",
-    "TaxAnnualAmount",
-    "taxAmount",
-    "TaxAmount",
-  ]);
-  const monthlyTaxes = pickNumberFromRecords(records, [
-    "monthlyTaxes",
-    "MonthlyTaxes",
-    "monthlyTaxAmount",
-    "MonthlyTaxAmount",
-  ]);
-  const commonCharges = pickNumberFromRecords(records, [
-    "commonCharges",
-    "CommonCharges",
-    "monthlyCommonCharges",
-    "MonthlyCommonCharges",
-  ]);
-  const maintenanceFee = pickNumberFromRecords(records, [
-    "maintenanceFee",
-    "MaintenanceFee",
-    "maintenance",
-    "Maintenance",
-  ]);
-  const hoaFee = pickNumberFromRecords(records, [
-    "hoaFee",
-    "HOAFee",
-    "associationFee",
-    "AssociationFee",
-  ]);
-  const assessmentFee = pickNumberFromRecords(records, [
-    "assessmentFee",
-    "AssessmentFee",
-    "specialAssessment",
-    "SpecialAssessment",
-  ]);
-
-  const estimatedMonthlyCarry =
-    [monthlyTaxes, commonCharges, maintenanceFee, hoaFee, assessmentFee]
-      .filter((value): value is number => value !== null)
-      .reduce((sum, value) => sum + value, 0) ||
-    (annualTaxes ? annualTaxes / 12 : null);
+  const cost = (keys: string[]) => pickFromRecords(records, keys, sourceAmount);
+  const period = (keys: string[]) => pickStringFromRecords(records, keys);
+  const annualTaxes = cost(["taxAnnualAmount", "TaxAnnualAmount", "annualTaxes", "AnnualTaxes", "taxAmount", "TaxAmount"]);
+  const monthlyTaxes = cost(["monthlyTaxes", "MonthlyTaxes", "monthlyTaxAmount", "MonthlyTaxAmount"]);
+  const explicitMonthlyCommon = cost(["monthlyCommonCharges", "MonthlyCommonCharges"]);
+  const commonCharges = explicitMonthlyCommon ?? cost(["commonCharges", "CommonCharges"]);
+  const commonChargesFrequency = explicitMonthlyCommon !== null ? "Monthly" : period(["commonChargesFrequency", "CommonChargesFrequency"]);
+  const explicitMonthlyMaintenance = cost(["monthlyMaintenanceFee", "KEY_EstimatedMaintenance"]);
+  const maintenanceFee = explicitMonthlyMaintenance ?? cost(["maintenanceFee", "MaintenanceFee", "maintenance", "Maintenance"]);
+  const maintenanceFeeFrequency = explicitMonthlyMaintenance !== null ? "Monthly" : period(["maintenanceFeeFrequency", "MaintenanceFeeFrequency"]);
+  const maintenanceFeeEstimated = pickBooleanFromRecords(records, ["maintenanceFeeEstimated"]) ?? (cost(["KEY_EstimatedMaintenance"]) !== null ? true : null);
+  const hoaFee = cost(["associationFee", "AssociationFee", "hoaFee", "HOAFee"]);
+  const hoaFeeFrequency = period(["associationFeeFrequency", "AssociationFeeFrequency", "hoaFeeFrequency"]);
+  const hoaFee2 = cost(["associationFee2", "AssociationFee2"]);
+  const hoaFee2Frequency = period(["associationFee2Frequency", "AssociationFee2Frequency"]);
+  const assessmentFee = cost(["assessmentFee", "AssessmentFee", "specialAssessment", "SpecialAssessment"]);
+  const assessmentFeeFrequency = period(["assessmentFeeFrequency", "AssessmentFeeFrequency"]);
+  const rawTaxYear = cost(["taxYear", "TaxYear"]);
+  const taxYear = rawTaxYear !== null && Number.isInteger(rawTaxYear) && rawTaxYear >= 1900 && rawTaxYear <= 2200 ? rawTaxYear : null;
+  // Fees can overlap (especially co-op taxes/maintenance), have different
+  // periods, or be incomplete. Do not manufacture a monthly carrying total.
 
   const amenities = Array.from(
     new Set([
@@ -544,14 +518,16 @@ function buildPropertyFacts(
 
   const facts: EventPropertyFacts = {
     financial: {
+      isCoop: isCooperativeOwnership(pickStringFromRecords(records, ["propertySubType", "PropertySubType", "propertyType", "PropertyType", "buildingType", "BuildingType"])) || undefined,
       annualTaxes,
+      taxYear,
       monthlyTaxes,
-      commonCharges,
-      maintenanceFee,
-      hoaFee,
-      assessmentFee,
-      estimatedMonthlyCarry:
-        estimatedMonthlyCarry && estimatedMonthlyCarry > 0 ? estimatedMonthlyCarry : null,
+      commonCharges, commonChargesFrequency,
+      maintenanceFee, maintenanceFeeFrequency, maintenanceFeeEstimated,
+      hoaFee, hoaFeeFrequency, hoaFee2, hoaFee2Frequency,
+      assessmentFee, assessmentFeeFrequency,
+      feeIncludes: pickStringArrayFromRecords(records, ["associationFeeIncludes", "AssociationFeeIncludes"]),
+      estimatedMonthlyCarry: null,
       flipTax: pickStringFromRecords(records, ["flipTax", "FlipTax"]),
       taxAbatement: pickStringFromRecords(records, ["taxAbatement", "TaxAbatement"]),
       notes: pickStringArrayFromRecords(records, [
@@ -564,7 +540,7 @@ function buildPropertyFacts(
     schools: {
       district:
         listing.schoolDistrict ||
-        pickStringFromRecords(records, ["schoolDistrict", "SchoolDistrict"]),
+        pickStringFromRecords(records, ["highSchoolDistrict", "HighSchoolDistrict", "schoolDistrict", "SchoolDistrict"]),
       elementary: pickStringFromRecords(records, [
         "elementarySchool",
         "ElementarySchool",
@@ -586,8 +562,10 @@ function buildPropertyFacts(
         "PropertySubType",
       ]),
       parking: pickStringArrayFromRecords(records, ["parkingFeatures", "ParkingFeatures"]),
+      garageSpaces: cost(["garageSpaces", "GarageSpaces"]),
+      parkingTotal: cost(["parkingTotal", "ParkingTotal"]),
       laundry: pickStringArrayFromRecords(records, ["laundryFeatures", "LaundryFeatures"]),
-      petPolicy: pickStringFromRecords(records, ["petPolicy", "petsAllowed", "PetsAllowed"]),
+      petPolicy: pickStringArrayFromRecords(records, ["petPolicy", "petsAllowed", "PetsAllowed"]).join(", ") || null,
       amenities: amenities.slice(0, 16),
       outdoorSpace: pickStringArrayFromRecords(records, [
         "outdoorSpace",
@@ -598,7 +576,12 @@ function buildPropertyFacts(
       utilitiesIncluded: pickStringArrayFromRecords(records, [
         "utilitiesIncluded",
         "UtilitiesIncluded",
+        "associationFeeIncludes",
+        "AssociationFeeIncludes",
       ]),
+      utilities: pickStringArrayFromRecords(records, ["utilities", "Utilities"]),
+      waterSource: pickStringArrayFromRecords(records, ["waterSource", "WaterSource"]),
+      sewer: pickStringArrayFromRecords(records, ["sewer", "Sewer"]),
       doorman:
         pickBooleanFromRecords(records, ["doorman", "Doorman"]) ??
         (amenityText.includes("doorman") ? true : null),
@@ -778,19 +761,12 @@ function extractListingAddress(
   };
 }
 
-function formatCurrency(value: number | null | undefined) {
-  if (value === null || value === undefined || !Number.isFinite(value)) {
-    return null;
-  }
-
-  return `$${Math.round(value).toLocaleString()}`;
-}
-
-function normalizeImportedListing(
+export function normalizeImportedListing(
   rawListing: Record<string, unknown>,
   source: ImportedListing["source"]
 ): ImportedListing {
-  const property = isRecord(rawListing.property) ? rawListing.property : rawListing;
+  const property = isRecord(rawListing.listing) ? rawListing.listing : isRecord(rawListing.property) ? rawListing.property : rawListing;
+  const publicDetails = isRecord(property.publicDetails) ? property.publicDetails : {};
   const resolvedAddress = extractListingAddress(property, rawListing);
   const mediaItems = Array.isArray(rawListing.media)
     ? rawListing.media.filter(isRecord)
@@ -804,6 +780,7 @@ function normalizeImportedListing(
     )
     .filter((entry): entry is string => Boolean(entry));
   const derivedPhotos = [
+    ...toStringArray(property.imageUrls),
     ...toStringArray(rawListing.imageUrls),
     ...mediaPhotoUrls,
     ...toStringArray(property.photos),
@@ -831,15 +808,15 @@ function normalizeImportedListing(
     lotSize: toNumber(property.lot_size ?? property.lotSize),
     yearBuilt: toNumber(property.year_built ?? property.yearBuilt ?? property.YearBuilt),
     propertyType: mapPropertyType(
-      toStringValue(property.property_type ?? property.propertyType ?? property.PropertyType)
+      toStringValue(property.propertySubType ?? property.PropertySubType ?? property.property_type ?? property.propertyType ?? property.PropertyType)
     ),
     status: toStringValue(property.status ?? property.standardStatus ?? property.StandardStatus),
     description: toStringValue(
       property.description ?? property.publicRemarks ?? property.PublicRemarks
     ),
-    features: toStringArray(property.features ?? property.interiorFeatures ?? property.appliances),
+    features: toStringArray(property.features ?? publicDetails.interiorFeatures ?? property.interiorFeatures ?? publicDetails.appliances ?? property.appliances),
     neighborhood: toStringValue(property.neighborhood ?? property.subdivisionName),
-    schoolDistrict: toStringValue(property.school_district ?? property.schoolDistrict),
+    schoolDistrict: toStringValue(publicDetails.highSchoolDistrict ?? property.highSchoolDistrict ?? property.school_district ?? property.schoolDistrict),
     photos: Array.from(new Set(derivedPhotos)),
     virtualTourUrl: toStringValue(
       property.virtual_tour_url ?? property.virtualTourUrl ?? property.virtualTourURL
@@ -850,7 +827,7 @@ function normalizeImportedListing(
     rawPayload: rawListing,
   };
 
-  const records = [property, rawListing].filter(isRecord);
+  const records = [publicDetails, property, rawListing].filter(isRecord);
 
   return {
     ...baseListing,
@@ -903,31 +880,9 @@ function buildFaq(listing: ImportedListing) {
     });
   }
 
-  if (
-    financial?.annualTaxes ||
-    financial?.commonCharges ||
-    financial?.maintenanceFee ||
-    financial?.hoaFee ||
-    financial?.assessmentFee
-  ) {
-    const pieces = [
-      financial.annualTaxes ? `Annual taxes: ${formatCurrency(financial.annualTaxes)}` : null,
-      financial.commonCharges
-        ? `Common charges: ${formatCurrency(financial.commonCharges)}/month`
-        : null,
-      financial.maintenanceFee
-        ? `Maintenance: ${formatCurrency(financial.maintenanceFee)}/month`
-        : null,
-      financial.hoaFee ? `HOA: ${formatCurrency(financial.hoaFee)}/month` : null,
-      financial.assessmentFee
-        ? `Assessment: ${formatCurrency(financial.assessmentFee)}/month`
-        : null,
-    ].filter(Boolean);
-
-    faqs.push({
-      question: "What monthly costs or taxes should buyers know about?",
-      answer: pieces.join(". "),
-    });
+  const financialLines = financialFactLines(financial, building?.buildingType);
+  if (financialLines.length) {
+    faqs.push({ question: "What costs or taxes should buyers know about?", answer: financialLines.join(". ") });
   }
 
   if (
@@ -1148,7 +1103,7 @@ async function generateMarketingCopy(listing: ImportedListing) {
       messages: [
         {
           role: "user",
-          content: `Write polished marketing copy for a public open-house sign-in page.\n\nReturn JSON only with:\n- headline: max 90 characters\n- summary: max 260 characters\n- highlights: array of 3 to 4 short bullets\n\nRules:\n- Sound credible, polished, and North American residential real-estate appropriate.\n- Do not invent facts.\n- Avoid raw MLS jargon, all-caps, and awkward abbreviations.\n- Avoid fair-housing sensitive language.\n- Focus on layout, light, flow, upgrades, convenience, and practical buyer value.\n\nListing facts:\n${JSON.stringify(facts, null, 2)}`,
+          content: `Write polished marketing copy for a public open-house sign-in page.\n\nReturn JSON only with:\n- headline: max 90 characters\n- summary: max 260 characters\n- highlights: array of 3 to 4 short bullets\n\nRules:\n- Sound credible, polished, and North American residential real-estate appropriate.\n- Do not invent facts.\n- Preserve estimated maintenance labels and source billing periods; never assume HOA is monthly or sum taxes with maintenance.\n- Avoid raw MLS jargon, all-caps, and awkward abbreviations.\n- Avoid fair-housing sensitive language.\n- Focus on layout, light, flow, upgrades, convenience, and practical buyer value.\n\nListing facts:\n${JSON.stringify(facts, null, 2)}`,
         },
       ],
       maxTokens: 420,
@@ -1330,19 +1285,9 @@ function splitAddressQuery(query: string) {
 }
 
 function extractLookupListing(payload: ListingLookupResponse) {
-  return (
-    payload.data?.listing ??
-    payload.listing ??
-    (payload.property
-      ? {
-          source: payload.source,
-          fallbackUsed: payload.fallbackUsed,
-          property: payload.property,
-          media: payload.media,
-          imageUrls: payload.imageUrls,
-        }
-      : null)
-  );
+  if (payload.data?.listing) return { ...payload, listing: payload.data.listing };
+  if (payload.listing || payload.property) return payload;
+  return null;
 }
 
 function buildAddressLookupPayload(input: AddressImportInput) {

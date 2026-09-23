@@ -15,12 +15,22 @@ export type PublicMode = (typeof publicModes)[number];
 
 export type EventPropertyFacts = {
   financial?: {
+    isCoop?: boolean | null;
     annualTaxes?: number | null;
+    taxYear?: number | null;
     monthlyTaxes?: number | null;
     commonCharges?: number | null;
+    commonChargesFrequency?: string | null;
     maintenanceFee?: number | null;
+    maintenanceFeeFrequency?: string | null;
+    maintenanceFeeEstimated?: boolean | null;
     hoaFee?: number | null;
+    hoaFeeFrequency?: string | null;
+    hoaFee2?: number | null;
+    hoaFee2Frequency?: string | null;
+    feeIncludes?: string[];
     assessmentFee?: number | null;
+    assessmentFeeFrequency?: string | null;
     estimatedMonthlyCarry?: number | null;
     flipTax?: string | null;
     taxAbatement?: string | null;
@@ -36,11 +46,16 @@ export type EventPropertyFacts = {
   building?: {
     buildingType?: string | null;
     parking?: string[];
+    garageSpaces?: number | null;
+    parkingTotal?: number | null;
     laundry?: string[];
     petPolicy?: string | null;
     amenities?: string[];
     outdoorSpace?: string[];
     utilitiesIncluded?: string[];
+    utilities?: string[];
+    waterSource?: string[];
+    sewer?: string[];
     doorman?: boolean | null;
     elevator?: boolean | null;
     gym?: boolean | null;

@@ -2,6 +2,31 @@
 
 This guide covers the pieces that protect deployed environments from schema drift and silent sync failures.
 
+## Imported property facts
+
+MLS lookup supports both `{ listing }` and `{ property }` response envelopes,
+including accompanying media. BBO's allowlisted `publicDetails` fields are mapped
+into the existing `aiQaContext.propertyFacts` JSON snapshot: association fees and
+their billing periods, estimated monthly maintenance, included services, schools,
+pets, parking, building features and interior systems. Annual taxes and their tax
+year remain separate facts. No database migration or new environment variables
+are needed for these additive fields.
+
+Co-op tax amounts are labeled as reported taxes: they may refer to the whole
+building or already be included in maintenance. The cost text tells buyers to
+confirm the unit's costs with management, including when an older snapshot
+identifies ownership through its building type.
+
+Financial values must be exact nonnegative numbers; explicit zero is preserved,
+while blank or qualified values are unknown. A missing fee period is not treated
+as monthly. Q&A, generated FAQs and seller reports use the same cost formatter.
+They do not show the legacy `estimatedMonthlyCarry` total, because maintenance
+and taxes can overlap and the imported charges may be incomplete.
+
+Existing events keep their saved snapshots until an agent imports the listing
+again. Reading an older snapshot does not invent a fee period or turn an old
+calculated carrying total into a verified charge.
+
 ## Environment variables
 
 In addition to the core app variables, production operators should set:

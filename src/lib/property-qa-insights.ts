@@ -165,7 +165,7 @@ export function getPropertyQaInsights(
     },
     {
       key: "financial",
-      label: "Taxes and carry",
+      label: "Taxes and fees",
       ready: hasAny([
         asNumber(financial?.annualTaxes),
         asNumber(financial?.monthlyTaxes),
@@ -173,11 +173,11 @@ export function getPropertyQaInsights(
         asNumber(financial?.maintenanceFee),
         asNumber(financial?.hoaFee),
         asNumber(financial?.assessmentFee),
-        asNumber(financial?.estimatedMonthlyCarry),
+        asNumber(financial?.hoaFee2),
         asString(financial?.flipTax),
         asString(financial?.taxAbatement),
       ]),
-      summary: "Taxes, HOA, maintenance, and monthly carrying costs",
+      summary: "Source-reported taxes, HOA, maintenance, and other fees",
     },
     {
       key: "building",

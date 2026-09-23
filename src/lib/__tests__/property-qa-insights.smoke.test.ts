@@ -50,10 +50,18 @@ describe("property qa insights smoke", () => {
     expect(insights.level).toBe("thin");
     expect(insights.publishReadiness.status).toBe("review");
     expect(insights.suggestedQuestions.length).toBeGreaterThanOrEqual(3);
-    expect(insights.missingLabels).toContain("Taxes and carry");
+    expect(insights.missingLabels).toContain("Taxes and fees");
     expect(insights.publishReadiness.recommendedActions).toContain(
       "Add at least a few custom FAQ answers or agent notes before relying on the public chat."
     );
+  });
+
+  it("does not count an old derived carry total as source financial facts", () => {
+    const insights = getPropertyQaInsights({
+      propertyAddress: "123 Main St",
+      aiQaContext: { propertyFacts: { financial: { estimatedMonthlyCarry: 2000 } } },
+    });
+    expect(insights.missingLabels).toContain("Taxes and fees");
   });
 
   it("blocks when even the core listing facts are missing", () => {

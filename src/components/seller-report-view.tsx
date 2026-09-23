@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { financialFactLines } from "@/lib/property-costs";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -184,18 +185,7 @@ export function SellerReportView({
     typeof listingFacts?.daysOnMarket === "number"
       ? `Days on market: ${listingFacts.daysOnMarket}`
       : null,
-    formatCurrency(financialFacts?.annualTaxes)
-      ? `Annual taxes: ${formatCurrency(financialFacts?.annualTaxes)}`
-      : null,
-    formatCurrency(financialFacts?.hoaFee)
-      ? `HOA: ${formatCurrency(financialFacts?.hoaFee)}/mo`
-      : null,
-    formatCurrency(financialFacts?.commonCharges)
-      ? `Common charges: ${formatCurrency(financialFacts?.commonCharges)}/mo`
-      : null,
-    formatCurrency(financialFacts?.estimatedMonthlyCarry)
-      ? `Estimated carry: ${formatCurrency(financialFacts?.estimatedMonthlyCarry)}`
-      : null,
+    ...financialFactLines(financialFacts, event.propertyFacts?.building?.buildingType),
   ].filter((item): item is string => Boolean(item));
   const neighborhoodHighlights = [
     ...(neighborhoodFacts?.nearbyTransit ?? []),
